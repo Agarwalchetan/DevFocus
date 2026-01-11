@@ -341,6 +341,85 @@ async def websocket_room(websocket: WebSocket, room_id: str):
         if not active_connections[room_id]:
             del active_connections[room_id]
 
+@app.get("/api/insights")
+async def get_insights(current_user: TokenData = Depends(get_current_user)):
+    """Get all cached insights (weekly, monthly, burnout, smart plan)"""
+    db = get_database()
+    user = await db.users.find_one({"email": current_user.email})
+    
+    insights_service = InsightsService(db)
+    insights_data = await insights_service.get_cached_insights(str(user["_id"]))
+    
+    return {
+        "weekly_insights": insights_data.get("weekly_insights", []),
+        "monthly_insights": insights_data.get("monthly_insights", []),
+        "burnout_detection": insights_data.get("burnout_detection"),
+        "smart_plan": insights_data.get("smart_plan"),
+        "generated_at": insights_data.get("generated_at")
+    }
+
+@app.post("/api/insights/refresh")
+async def refresh_insights(current_user: TokenData = Depends(get_current_user)):
+    """Force refresh insights cache"""
+    db = get_database()
+    user = await db.users.find_one({"email": current_user.email})
+    
+    insights_service = InsightsService(db)
+    insights_data = await insights_service.cache_insights(str(user["_id"]))
+    
+    return {
+        "message": "Insights refreshed successfully",
+        "weekly_insights": insights_data.get("weekly_insights", []),
+        "monthly_insights": insights_data.get("monthly_insights", []),
+        "burnout_detection": insights_data.get("burnout_detection"),
+        "smart_plan": insights_data.get("smart_plan"),
+        "generated_at": insights_data.get("generated_at")
+    }
+
+@app.get("/api/insights/weekly")
+async def get_weekly_insights(current_user: TokenData = Depends(get_current_user)):
+    """Get weekly insights"""
+    db = get_database()
+    user = await db.users.find_one({"email": current_user.email})
+    
+    insights_service = InsightsService(db)
+    insights = await insights_service.calculate_weekly_insights(str(user["_id"]))
+    
+    return {"insights": insights}
+
+@app.get("/api/insights/monthly")
+async def get_monthly_insights(current_user: TokenData = Depends(get_current_user)):
+    """Get monthly insights"""
+    db = get_database()
+    user = await db.users.find_one({"email": current_user.email})
+    
+    insights_service = InsightsService(db)
+    insights = await insights_service.calculate_monthly_insights(str(user["_id"]))
+    
+    return {"insights": insights}
+
+@app.get("/api/insights/burnout")
+async def get_burnout_detection(current_user: TokenData = Depends(get_current_user)):
+    """Get burnout detection data"""
+    db = get_database()
+    user = await db.users.find_one({"email": current_user.email})
+    
+    insights_service = InsightsService(db)
+    burnout_data = await insights_service.detect_burnout(str(user["_id"]))
+    
+    return {"burnout": burnout_data}
+
+@app.get("/api/insights/smart-plan")
+async def get_smart_plan(current_user: TokenData = Depends(get_current_user)):
+    """Get smart daily plan"""
+    db = get_database()
+    user = await db.users.find_one({"email": current_user.email})
+    
+    insights_service = InsightsService(db)
+    plan = await insights_service.generate_smart_plan(str(user["_id"]))
+    
+    return {"plan": plan}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)
