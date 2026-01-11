@@ -91,3 +91,41 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: Optional[str] = None
+
+class InsightResponse(BaseModel):
+    type: str
+    title: str
+    description: str
+    data: Dict
+    icon: str
+
+class BurnoutDetectionResponse(BaseModel):
+    detected: bool
+    severity: Optional[int] = None
+    level: Optional[str] = None
+    signals: Optional[List[str]] = None
+    description: Optional[str] = None
+    data: Optional[Dict] = None
+
+class SmartPlanTaskResponse(BaseModel):
+    id: Optional[str] = None
+    title: str
+    type: str
+    estimatedTime: int
+    techTags: List[str] = []
+    reason: Optional[str] = None
+
+class SmartPlanResponse(BaseModel):
+    suggested_tasks: List[SmartPlanTaskResponse]
+    new_task_suggestion: Optional[SmartPlanTaskResponse] = None
+    best_time_window: Dict
+    estimated_total_duration: int
+    recommended_capacity: float
+    description: str
+
+class InsightsCacheResponse(BaseModel):
+    weekly_insights: List[InsightResponse]
+    monthly_insights: List[InsightResponse]
+    burnout_detection: Optional[BurnoutDetectionResponse] = None
+    smart_plan: SmartPlanResponse
+    generated_at: str
