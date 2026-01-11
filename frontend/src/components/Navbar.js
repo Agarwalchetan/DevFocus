@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, ListTodo, Clock, Activity, Users, LogOut, Flame } from 'lucide-react';
+import { LayoutDashboard, ListTodo, Clock, Activity, Users, LogOut, Flame, Lightbulb } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { useAuth } from '../contexts/AuthContext';
@@ -11,6 +11,7 @@ export const Navbar = ({ currentPage, onNavigate }) => {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'tasks', label: 'Tasks', icon: ListTodo },
     { id: 'focus', label: 'Focus', icon: Clock },
+    { id: 'insights', label: 'Insights', icon: Lightbulb },
     { id: 'heatmap', label: 'Heatmap', icon: Activity },
     { id: 'rooms', label: 'Rooms', icon: Users },
   ];
