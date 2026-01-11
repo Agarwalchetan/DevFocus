@@ -105,7 +105,7 @@ export const Dashboard = ({ onNavigate, onStartFocus }) => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-4xl font-bold text-foreground mb-2">
+          <h1 className="text-4xl font-bold text-foreground mb-2" data-testid="dashboard-welcome">
             Welcome back, {user?.name}
           </h1>
           <p className="text-muted-foreground">
@@ -115,7 +115,7 @@ export const Dashboard = ({ onNavigate, onStartFocus }) => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-border bg-card/50 backdrop-blur">
+        <Card className="border-border bg-card/50 backdrop-blur" data-testid="streak-card">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Current Streak
@@ -132,7 +132,7 @@ export const Dashboard = ({ onNavigate, onStartFocus }) => {
           </CardContent>
         </Card>
 
-        <Card className="border-border bg-card/50 backdrop-blur">
+        <Card className="border-border bg-card/50 backdrop-blur" data-testid="today-focus-card">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Today's Focus
@@ -150,7 +150,7 @@ export const Dashboard = ({ onNavigate, onStartFocus }) => {
           </CardContent>
         </Card>
 
-        <Card className="border-border bg-card/50 backdrop-blur">
+        <Card className="border-border bg-card/50 backdrop-blur" data-testid="week-focus-card">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               This Week
@@ -167,7 +167,7 @@ export const Dashboard = ({ onNavigate, onStartFocus }) => {
           </CardContent>
         </Card>
 
-        <Card className="border-border bg-card/50 backdrop-blur">
+        <Card className="border-border bg-card/50 backdrop-blur" data-testid="top-tech-card">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Top Tech
