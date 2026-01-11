@@ -51,6 +51,7 @@ function AppContent() {
         )}
         {currentPage === 'heatmap' && <Heatmap />}
         {currentPage === 'rooms' && <FocusRooms />}
+        {currentPage === 'insights' && <Insights onNavigate={setCurrentPage} onStartFocus={handleStartFocus} />}
       </main>
     </div>
   );
