@@ -12,12 +12,43 @@ export const Dashboard = ({ onNavigate, onStartFocus }) => {
   const [tasks, setTasks] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [burnoutChecked, setBurnoutChecked] = useState(false);
 
   const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
   useEffect(() => {
     fetchDashboardData();
+    checkBurnout();
   }, []);
+
+  const checkBurnout = async () => {
+    if (burnoutChecked) return;
+    
+    try {
+      const response = await fetch(`${API_URL}/api/insights/burnout`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.burnout && data.burnout.detected) {
+          const severity = data.burnout.level;
+          const message = data.burnout.description;
+          
+          if (severity === 'high') {
+            toast.error(message, { duration: 10000 });
+          } else if (severity === 'medium') {
+            toast.warning(message, { duration: 8000 });
+          } else {
+            toast.info(message, { duration: 6000 });
+          }
+        }
+        setBurnoutChecked(true);
+      }
+    } catch (error) {
+      console.error('Failed to check burnout:', error);
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
