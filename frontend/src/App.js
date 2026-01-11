@@ -7,6 +7,7 @@ import { Tasks } from './pages/Tasks';
 import { FocusTimer } from './pages/FocusTimer';
 import { Heatmap } from './pages/Heatmap';
 import { FocusRooms } from './pages/FocusRooms';
+import { Insights } from './pages/Insights';
 import { Navbar } from './components/Navbar';
 
 function AppContent() {
