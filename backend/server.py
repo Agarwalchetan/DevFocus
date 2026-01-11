@@ -8,6 +8,7 @@ import json
 from database import connect_to_mongo, close_mongo_connection, get_database
 from models import *
 from auth import get_password_hash, verify_password, create_access_token, get_current_user
+from insights_service import InsightsService
 
 active_connections: Dict[str, List[WebSocket]] = {}
 
