@@ -2,20 +2,19 @@ import os
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
-from emergentintegrations.llm.chat import LlmChat, UserMessage
 import json
+import httpx
 
 load_dotenv()
 
 # AI Configuration
-USE_AI_INSIGHTS = os.environ.get('USE_AI_INSIGHTS', 'true').lower() == 'true'
-AI_PRIMARY_PROVIDER = os.environ.get('AI_PRIMARY_PROVIDER', 'openai')
-AI_PRIMARY_MODEL = os.environ.get('AI_PRIMARY_MODEL', 'gpt-5.2')
-AI_SECONDARY_PROVIDER = os.environ.get('AI_SECONDARY_PROVIDER', 'anthropic')
-AI_SECONDARY_MODEL = os.environ.get('AI_SECONDARY_MODEL', 'claude-4-sonnet-20250514')
-AI_TERTIARY_PROVIDER = os.environ.get('AI_TERTIARY_PROVIDER', 'gemini')
-AI_TERTIARY_MODEL = os.environ.get('AI_TERTIARY_MODEL', 'gemini-2.5-pro')
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+USE_AI_INSIGHTS = os.environ.get('USE_AI_INSIGHTS', 'false').lower() == 'true'
+AI_PRIMARY_PROVIDER = os.environ.get('AI_PRIMARY_PROVIDER')
+AI_PRIMARY_MODEL = os.environ.get('AI_PRIMARY_MODEL')
+AI_SECONDARY_PROVIDER = os.environ.get('AI_SECONDARY_PROVIDER')
+AI_SECONDARY_MODEL = os.environ.get('AI_SECONDARY_MODEL')
+AI_TERTIARY_PROVIDER = os.environ.get('AI_TERTIARY_PROVIDER')
+AI_TERTIARY_MODEL = os.environ.get('AI_TERTIARY_MODEL')
 
 
 class InsightsService:
@@ -23,12 +22,168 @@ class InsightsService:
     
     def __init__(self, db):
         self.db = db
+
+    def _get_ai_model_configs(self) -> List[Dict]:
+        raw = os.environ.get("AI_MODELS") or os.environ.get("AI_MODELS_JSON")
+        if raw:
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    parsed = [parsed]
+                if isinstance(parsed, list):
+                    return parsed
+            except Exception as e:
+                print(f"AI_MODELS parse failed: {e}")
+
+        configs: List[Dict] = []
+        if AI_PRIMARY_PROVIDER and AI_PRIMARY_MODEL:
+            configs.append({"provider": AI_PRIMARY_PROVIDER, "model": AI_PRIMARY_MODEL, "isUsed": True})
+        if AI_SECONDARY_PROVIDER and AI_SECONDARY_MODEL:
+            configs.append({"provider": AI_SECONDARY_PROVIDER, "model": AI_SECONDARY_MODEL, "isUsed": True})
+        if AI_TERTIARY_PROVIDER and AI_TERTIARY_MODEL:
+            configs.append({"provider": AI_TERTIARY_PROVIDER, "model": AI_TERTIARY_MODEL, "isUsed": True})
+        return configs
+
+    def _resolve_api_key(self, provider: str, config: Dict) -> Optional[str]:
+        api_key = config.get("apiKey") or config.get("api_key")
+        if isinstance(api_key, str) and api_key.startswith("env:"):
+            return os.environ.get(api_key[4:])
+
+        api_key_env = config.get("apiKeyEnv") or config.get("api_key_env")
+        if isinstance(api_key_env, str):
+            return os.environ.get(api_key_env)
+
+        if isinstance(api_key, str) and api_key.strip():
+            return api_key.strip()
+
+        provider_l = (provider or "").lower()
+        if provider_l == "openai":
+            return os.environ.get("OPENAI_API_KEY")
+        if provider_l == "groq":
+            return os.environ.get("GROQ_API_KEY")
+        if provider_l == "anthropic":
+            return os.environ.get("ANTHROPIC_API_KEY")
+        if provider_l == "gemini":
+            return os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        return None
+
+    async def _call_openai(self, api_key: str, model: str, system_message: str, prompt: str) -> str:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.7,
+            "max_tokens": 220,
+        }
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+            r.raise_for_status()
+            data = r.json()
+
+        choices = data.get("choices") or []
+        if not choices:
+            return ""
+        message = (choices[0] or {}).get("message") or {}
+        return (message.get("content") or "").strip()
+
+    async def _call_groq(self, api_key: str, model: str, system_message: str, prompt: str) -> str:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.7,
+            "max_tokens": 220,
+        }
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload)
+            r.raise_for_status()
+            data = r.json()
+
+        choices = data.get("choices") or []
+        if not choices:
+            return ""
+        message = (choices[0] or {}).get("message") or {}
+        return (message.get("content") or "").strip()
+
+    async def _call_anthropic(self, api_key: str, model: str, system_message: str, prompt: str) -> str:
+        headers = {
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": model,
+            "max_tokens": 240,
+            "system": system_message,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post("https://api.anthropic.com/v1/messages", headers=headers, json=payload)
+            r.raise_for_status()
+            data = r.json()
+
+        content = data.get("content") or []
+        if not content:
+            return ""
+        first = content[0] or {}
+        return (first.get("text") or "").strip()
+
+    async def _call_gemini(self, api_key: str, model: str, system_message: str, prompt: str) -> str:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        payload = {
+            "system_instruction": {"parts": [{"text": system_message}]},
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.7, "maxOutputTokens": 240},
+        }
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(url, json=payload)
+            r.raise_for_status()
+            data = r.json()
+
+        candidates = data.get("candidates") or []
+        if not candidates:
+            return ""
+        content = (candidates[0] or {}).get("content") or {}
+        parts = content.get("parts") or []
+        if not parts:
+            return ""
+        return (parts[0].get("text") or "").strip()
+
+    async def _call_llm_provider(self, provider: str, api_key: str, model: str, system_message: str, prompt: str) -> str:
+        provider_l = (provider or "").lower()
+        if provider_l == "openai":
+            return await self._call_openai(api_key, model, system_message, prompt)
+        if provider_l == "groq":
+            return await self._call_groq(api_key, model, system_message, prompt)
+        if provider_l == "anthropic":
+            return await self._call_anthropic(api_key, model, system_message, prompt)
+        if provider_l == "gemini":
+            return await self._call_gemini(api_key, model, system_message, prompt)
+        raise ValueError(f"Unsupported AI provider: {provider}")
     
     async def generate_ai_description(self, insight_data: Dict, context: str) -> str:
         """Generate personalized insight description using AI with fallback"""
-        
-        if not USE_AI_INSIGHTS or not EMERGENT_LLM_KEY:
+
+        if not USE_AI_INSIGHTS:
             return self._generate_rule_based_description(insight_data, context)
+
+        system_message = "You are a productivity coach helping developers understand their work patterns."
         
         prompt = f"""Based on the following developer productivity data, generate a brief, personalized insight (2-3 sentences max). Be encouraging and actionable.
 
@@ -36,48 +191,29 @@ Context: {context}
 Data: {json.dumps(insight_data, indent=2)}
 
 Generate a friendly, encouraging insight that helps the developer understand their productivity pattern and what they can do about it."""
-        
-        # Try primary AI provider
-        try:
-            chat = LlmChat(
-                api_key=EMERGENT_LLM_KEY,
-                session_id=f"insight_{datetime.utcnow().timestamp()}",
-                system_message="You are a productivity coach helping developers understand their work patterns."
-            ).with_model(AI_PRIMARY_PROVIDER, AI_PRIMARY_MODEL)
-            
-            response = await chat.send_message(UserMessage(text=prompt))
-            if response and len(response.strip()) > 20:
-                return response.strip()
-        except Exception as e:
-            print(f"Primary AI provider failed: {e}")
-        
-        # Try secondary AI provider
-        try:
-            chat = LlmChat(
-                api_key=EMERGENT_LLM_KEY,
-                session_id=f"insight_{datetime.utcnow().timestamp()}",
-                system_message="You are a productivity coach helping developers understand their work patterns."
-            ).with_model(AI_SECONDARY_PROVIDER, AI_SECONDARY_MODEL)
-            
-            response = await chat.send_message(UserMessage(text=prompt))
-            if response and len(response.strip()) > 20:
-                return response.strip()
-        except Exception as e:
-            print(f"Secondary AI provider failed: {e}")
-        
-        # Try tertiary AI provider
-        try:
-            chat = LlmChat(
-                api_key=EMERGENT_LLM_KEY,
-                session_id=f"insight_{datetime.utcnow().timestamp()}",
-                system_message="You are a productivity coach helping developers understand their work patterns."
-            ).with_model(AI_TERTIARY_PROVIDER, AI_TERTIARY_MODEL)
-            
-            response = await chat.send_message(UserMessage(text=prompt))
-            if response and len(response.strip()) > 20:
-                return response.strip()
-        except Exception as e:
-            print(f"Tertiary AI provider failed: {e}")
+
+        model_configs = self._get_ai_model_configs()
+        if not model_configs:
+            return self._generate_rule_based_description(insight_data, context)
+        for idx, config in enumerate(model_configs, start=1):
+            is_used = config.get("isUsed")
+            if is_used is None:
+                is_used = config.get("is_used", True)
+            if str(is_used).lower() != "true":
+                continue
+
+            provider = config.get("provider") or ""
+            model = config.get("model") or ""
+            api_key = self._resolve_api_key(provider, config)
+            if not provider or not model or not api_key:
+                continue
+
+            try:
+                response = await self._call_llm_provider(provider, api_key, model, system_message, prompt)
+                if response and len(response.strip()) > 20:
+                    return response.strip()
+            except Exception as e:
+                print(f"AI provider attempt {idx} failed ({provider}/{model}): {e}")
         
         # Fallback to rule-based
         return self._generate_rule_based_description(insight_data, context)
