@@ -1,6 +1,6 @@
-# DevPulse
+# DevFocus
 
-DevPulse is a full-stack productivity and focus-tracking application built with **React (frontend)**, **FastAPI (backend)**, and **MongoDB**.
+DevFocus is a full-stack productivity and focus-tracking application built with **React (frontend)**, **FastAPI (backend)**, and **MongoDB**.
 It supports authentication, task management, focus sessions, heatmaps, and real-time focus rooms via WebSockets.
 
 ---
@@ -9,17 +9,17 @@ It supports authentication, task management, focus sessions, heatmaps, and real-
 
 **Frontend**
 
-* React (CRA)
-* CRACO
-* Yarn
-* Tailwind CSS
+- React (CRA)
+- CRACO
+- Yarn
+- Tailwind CSS
 
 **Backend**
 
-* FastAPI
-* MongoDB (Motor)
-* JWT Authentication
-* WebSockets (Uvicorn)
+- FastAPI
+- MongoDB (Motor)
+- JWT Authentication
+- WebSockets (Uvicorn)
 
 ---
 
@@ -54,10 +54,10 @@ app/
 
 Make sure these are installed:
 
-* **Node.js** (v18+ recommended)
-* **Yarn**
-* **Python** (3.10+ recommended)
-* **MongoDB** (local instance)
+- **Node.js** (v18+ recommended)
+- **Yarn**
+- **Python** (3.10+ recommended)
+- **MongoDB** (local instance)
 
 ---
 
@@ -175,12 +175,12 @@ Both frontend and backend must be running.
 
 ### 401 Unauthorized on login
 
-* Wrong credentials
-* Old password hash
-* Clear users and re-register
+- Wrong credentials
+- Old password hash
+- Clear users and re-register
 
 ```js
-db.users.deleteMany({})
+db.users.deleteMany({});
 ```
 
 ---
@@ -222,9 +222,9 @@ yarn build
 
 Backend:
 
-* Run with `uvicorn`
-* Configure proper domain CORS
-* Use environment-specific secrets
+- Run with `uvicorn`
+- Configure proper domain CORS
+- Use environment-specific secrets
 
 ---
 

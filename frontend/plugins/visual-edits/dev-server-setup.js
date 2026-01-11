@@ -40,7 +40,7 @@ const isAllowedOrigin = (origin) => {
 
   // OPTIONAL: allow your production domain
   // Example:
-  // if (origin === "https://devpulse.yourdomain.com") {
+  // if (origin === "https://DevFocus.yourdomain.com") {
   //   return true;
   // }
 
