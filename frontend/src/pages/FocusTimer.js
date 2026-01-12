@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTimer, useNotification } from '../hooks/useCustomHooks';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import {
@@ -21,14 +22,17 @@ export const FocusTimer = ({ initialTask, onComplete }) => {
   const [tasks, setTasks] = useState([]);
   const [sessionId, setSessionId] = useState(null);
   const [duration, setDuration] = useState(25);
+  const [customDuration, setCustomDuration] = useState('');
   const [audioPlayed, setAudioPlayed] = useState(false);
+
+  const SESSION_STORAGE_KEY = 'focusSession';
 
   const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
   const handleComplete = async () => {
     if (!audioPlayed) {
       const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSubz/LLdSgFI3DC8NyOPwkSXLPn6qNUEwlBnemyt2EaBS2ezPLMezApBS6C0fPblywHG2U=');
-      audio.play().catch(() => {});
+      audio.play().catch(() => { });
       setAudioPlayed(true);
     }
 
@@ -54,6 +58,7 @@ export const FocusTimer = ({ initialTask, onComplete }) => {
 
   useEffect(() => {
     fetchTasks();
+    restoreSessionState();
   }, []);
 
   useEffect(() => {
@@ -61,6 +66,35 @@ export const FocusTimer = ({ initialTask, onComplete }) => {
       setSelectedTask(initialTask);
     }
   }, [initialTask]);
+
+  useEffect(() => {
+    if (sessionId || selectedTask || duration !== 25) {
+      saveSessionState();
+    }
+  }, [sessionId, selectedTask, duration]);
+
+  const restoreSessionState = () => {
+    try {
+      const saved = localStorage.getItem(SESSION_STORAGE_KEY);
+      if (saved) {
+        const { sessionId: savedSessionId, selectedTask: savedTask, duration: savedDuration } = JSON.parse(saved);
+        if (savedSessionId) setSessionId(savedSessionId);
+        if (savedTask) setSelectedTask(savedTask);
+        if (savedDuration) setDuration(savedDuration);
+      }
+    } catch (error) {
+      console.error('Failed to restore session state:', error);
+    }
+  };
+
+  const saveSessionState = () => {
+    const state = {
+      sessionId,
+      selectedTask,
+      duration
+    };
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(state));
+  };
 
   const fetchTasks = async () => {
     try {
@@ -96,6 +130,7 @@ export const FocusTimer = ({ initialTask, onComplete }) => {
       const session = await response.json();
       setSessionId(session.id);
       setAudioPlayed(false);
+      saveSessionState();
       timer.start();
       toast.success('Focus session started!');
     } catch (error) {
@@ -111,7 +146,19 @@ export const FocusTimer = ({ initialTask, onComplete }) => {
   const handleReset = () => {
     timer.reset(duration);
     setSessionId(null);
+    localStorage.removeItem(SESSION_STORAGE_KEY);
     toast('Timer reset');
+  };
+
+  const handleCustomDurationChange = (value) => {
+    const num = parseInt(value);
+    if (value === '' || (num >= 1 && num <= 180)) {
+      setCustomDuration(value);
+      if (num >= 1 && num <= 180) {
+        setDuration(num);
+        timer.reset(num);
+      }
+    }
   };
 
   const typeColors = {
@@ -158,18 +205,19 @@ export const FocusTimer = ({ initialTask, onComplete }) => {
 
                   <div className="space-y-2">
                     <label className="text-sm text-muted-foreground">Duration</label>
-                    <div className="flex gap-2 justify-center">
+                    <div className="flex gap-2 justify-center flex-wrap">
                       {[25, 45, 60, 90].map((min) => (
                         <Button
                           key={min}
-                          variant={duration === min ? 'default' : 'outline'}
+                          variant={duration === min && !customDuration ? 'default' : 'outline'}
                           size="sm"
                           onClick={() => {
                             setDuration(min);
+                            setCustomDuration('');
                             timer.reset(min);
                           }}
                           className={
-                            duration === min
+                            duration === min && !customDuration
                               ? 'bg-primary hover:bg-primary-hover'
                               : 'border-border'
                           }
@@ -177,6 +225,18 @@ export const FocusTimer = ({ initialTask, onComplete }) => {
                           {min}m
                         </Button>
                       ))}
+                    </div>
+                    <div className="flex items-center gap-2 justify-center">
+                      <Input
+                        type="number"
+                        min="1"
+                        max="180"
+                        placeholder="Custom (1-180)"
+                        value={customDuration}
+                        onChange={(e) => handleCustomDurationChange(e.target.value)}
+                        className="w-32 text-center bg-secondary/50 border-border"
+                      />
+                      <span className="text-sm text-muted-foreground">minutes</span>
                     </div>
                   </div>
                 </div>

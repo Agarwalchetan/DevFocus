@@ -74,16 +74,74 @@ export const useNotification = () => {
 };
 
 export const useTimer = (initialMinutes, onComplete) => {
-  const [timeLeft, setTimeLeft] = useState(initialMinutes * 60);
-  const [isRunning, setIsRunning] = useState(false);
+  const STORAGE_KEY = 'focusTimer';
+
+  // Initialize state from localStorage or defaults
+  const getInitialState = () => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const { timeLeft, isRunning, startTime, duration } = JSON.parse(saved);
+
+        // If timer was running, calculate actual time left based on elapsed time
+        if (isRunning && startTime) {
+          const elapsed = Math.floor((Date.now() - startTime) / 1000);
+          const actualTimeLeft = Math.max(0, timeLeft - elapsed);
+          return {
+            timeLeft: actualTimeLeft,
+            isRunning: actualTimeLeft > 0,
+            duration: duration || initialMinutes
+          };
+        }
+
+        return {
+          timeLeft: timeLeft || initialMinutes * 60,
+          isRunning: false,
+          duration: duration || initialMinutes
+        };
+      }
+    } catch (error) {
+      console.error('Failed to load timer state:', error);
+    }
+
+    return {
+      timeLeft: initialMinutes * 60,
+      isRunning: false,
+      duration: initialMinutes
+    };
+  };
+
+  const initialState = getInitialState();
+  const [timeLeft, setTimeLeft] = useState(initialState.timeLeft);
+  const [isRunning, setIsRunning] = useState(initialState.isRunning);
+  const [duration, setDuration] = useState(initialState.duration);
   const intervalRef = useRef(null);
+  const startTimeRef = useRef(null);
+
+  // Save state to localStorage whenever it changes
+  useEffect(() => {
+    const state = {
+      timeLeft,
+      isRunning,
+      startTime: startTimeRef.current,
+      duration
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }, [timeLeft, isRunning, duration]);
 
   useEffect(() => {
     if (isRunning && timeLeft > 0) {
+      // Set start time when timer starts
+      if (!startTimeRef.current) {
+        startTimeRef.current = Date.now();
+      }
+
       intervalRef.current = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev <= 1) {
             setIsRunning(false);
+            startTimeRef.current = null;
+            localStorage.removeItem(STORAGE_KEY);
             onComplete?.();
             return 0;
           }
@@ -94,6 +152,10 @@ export const useTimer = (initialMinutes, onComplete) => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
+      // Clear start time when paused
+      if (!isRunning) {
+        startTimeRef.current = null;
+      }
     }
 
     return () => {
@@ -103,11 +165,22 @@ export const useTimer = (initialMinutes, onComplete) => {
     };
   }, [isRunning, timeLeft, onComplete]);
 
-  const start = () => setIsRunning(true);
-  const pause = () => setIsRunning(false);
+  const start = () => {
+    setIsRunning(true);
+    startTimeRef.current = Date.now();
+  };
+
+  const pause = () => {
+    setIsRunning(false);
+    startTimeRef.current = null;
+  };
+
   const reset = (minutes) => {
     setTimeLeft(minutes * 60);
+    setDuration(minutes);
     setIsRunning(false);
+    startTimeRef.current = null;
+    localStorage.removeItem(STORAGE_KEY);
   };
 
   const formatTime = () => {
@@ -123,6 +196,7 @@ export const useTimer = (initialMinutes, onComplete) => {
     pause,
     reset,
     formatTime,
-    progress: ((initialMinutes * 60 - timeLeft) / (initialMinutes * 60)) * 100,
+    progress: ((duration * 60 - timeLeft) / (duration * 60)) * 100,
+    duration,
   };
 };
