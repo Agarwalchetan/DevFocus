@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Toaster } from './components/ui/sonner';
 import { Auth } from './pages/Auth';
@@ -13,7 +13,11 @@ import { Navbar } from './components/Navbar';
 
 function AppContent() {
   const { user, loading } = useAuth();
-  const [currentPage, setCurrentPage] = useState('dashboard');
+  const [currentPage, setCurrentPage] = useState(() => localStorage.getItem('lastPage') || 'dashboard');
+
+  useEffect(() => {
+    localStorage.setItem('lastPage', currentPage);
+  }, [currentPage]);
   const [focusTask, setFocusTask] = useState(null);
 
   const handleStartFocus = (task) => {

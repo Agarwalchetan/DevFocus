@@ -22,6 +22,7 @@ export const Tasks = ({ onStartFocus }) => {
   const [filteredTasks, setFilteredTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [activeSection, setActiveSection] = useState('all'); // 'daily', 'future', 'all'
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
@@ -31,6 +32,7 @@ export const Tasks = ({ onStartFocus }) => {
     type: 'Coding',
     techTags: '',
     estimatedTime: 60,
+    scheduledDate: '',
   });
 
   useEffect(() => {
@@ -39,7 +41,7 @@ export const Tasks = ({ onStartFocus }) => {
 
   useEffect(() => {
     applyFilter();
-  }, [tasks, filter]);
+  }, [tasks, filter, activeSection]);
 
   const fetchTasks = async () => {
     try {
@@ -58,6 +60,7 @@ export const Tasks = ({ onStartFocus }) => {
   const applyFilter = () => {
     let filtered = tasks;
 
+    // Apply status/type filter
     if (filter === 'active') {
       filtered = tasks.filter((t) => t.status !== 'completed');
     } else if (filter === 'completed') {
@@ -66,8 +69,77 @@ export const Tasks = ({ onStartFocus }) => {
       filtered = tasks.filter((t) => t.type === filter);
     }
 
+    // Apply section filter
+    // Use local date string comparison to avoid timezone issues
+    const d = new Date();
+    const todayStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+
+    if (activeSection === 'daily') {
+      // Daily: today + overdue tasks (dates <= today)
+      filtered = filtered.filter(task => {
+        if (!task.scheduledDate) return false;
+        return task.scheduledDate <= todayStr;
+      });
+    } else if (activeSection === 'future') {
+      // Future: tasks scheduled for future dates (dates > today)
+      filtered = filtered.filter(task => {
+        if (!task.scheduledDate) return false;
+        return task.scheduledDate > todayStr;
+      });
+    }
+
     setFilteredTasks(filtered);
   };
+
+  // Helper functions for task categorization
+  const getTaskCounts = () => {
+    const d = new Date();
+    const todayStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+
+    const dailyCount = tasks.filter(task => {
+      if (!task.scheduledDate) return false;
+      return task.scheduledDate <= todayStr;
+    }).length;
+
+    const futureCount = tasks.filter(task => {
+      if (!task.scheduledDate) return false;
+      return task.scheduledDate > todayStr;
+    }).length;
+
+    return { daily: dailyCount, future: futureCount, all: tasks.length };
+  };
+
+  const formatRelativeDate = (dateString) => {
+    if (!dateString) return null;
+
+    const d = new Date();
+    const todayStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+
+    if (dateString < todayStr) return 'Overdue';
+    if (dateString === todayStr) return 'Today';
+
+    // Calculate days diff for future
+    const date = new Date(dateString);
+    const today = new Date(todayStr);
+    const diffTime = Math.abs(date - today);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 1) return 'Tomorrow';
+    if (diffDays <= 7) return `In ${diffDays} days`;
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  const getDateBadgeColor = (dateString) => {
+    if (!dateString) return '';
+    const d = new Date();
+    const todayStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+
+    if (dateString < todayStr) return 'border-destructive text-destructive bg-destructive-subtle'; // Overdue
+    if (dateString === todayStr) return 'border-primary text-primary bg-primary-subtle'; // Today
+    return 'border-secondary text-secondary-foreground bg-secondary'; // Future
+  };
+
+  const taskCounts = getTaskCounts();
 
   const createTask = async (e) => {
     e.preventDefault();
@@ -88,7 +160,7 @@ export const Tasks = ({ onStartFocus }) => {
       if (response.ok) {
         await fetchTasks();
         setDialogOpen(false);
-        setNewTask({ title: '', type: 'Coding', techTags: '', estimatedTime: 60 });
+        setNewTask({ title: '', type: 'Coding', techTags: '', estimatedTime: 60, scheduledDate: '' });
         toast.success('Task created successfully');
       }
     } catch (error) {
@@ -154,7 +226,34 @@ export const Tasks = ({ onStartFocus }) => {
           <h1 className="text-4xl font-bold text-foreground mb-2">Tasks</h1>
           <p className="text-muted-foreground">Manage your developer tasks</p>
         </div>
+      </div>
 
+      {/* Section Tabs */}
+      <div className="flex gap-2">
+        <Button
+          onClick={() => setActiveSection('daily')}
+          variant={activeSection === 'daily' ? 'default' : 'outline'}
+          size="sm"
+        >
+          Daily ({taskCounts.daily})
+        </Button>
+        <Button
+          onClick={() => setActiveSection('future')}
+          variant={activeSection === 'future' ? 'default' : 'outline'}
+          size="sm"
+        >
+          Future ({taskCounts.future})
+        </Button>
+        <Button
+          onClick={() => setActiveSection('all')}
+          variant={activeSection === 'all' ? 'default' : 'outline'}
+          size="sm"
+        >
+          All ({taskCounts.all})
+        </Button>
+      </div>
+
+      <div className="flex justify-end mb-4">
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-primary hover:bg-primary-hover">
@@ -223,6 +322,22 @@ export const Tasks = ({ onStartFocus }) => {
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="scheduledDate">Scheduled Date (Optional)</Label>
+                <Input
+                  id="scheduledDate"
+                  type="date"
+                  value={newTask.scheduledDate}
+                  onChange={(e) =>
+                    setNewTask({ ...newTask, scheduledDate: e.target.value })
+                  }
+                  className="bg-secondary/50 border-border"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave empty for unscheduled tasks
+                </p>
+              </div>
+
               <Button type="submit" className="w-full bg-primary hover:bg-primary-hover">
                 Create Task
               </Button>
@@ -286,6 +401,14 @@ export const Tasks = ({ onStartFocus }) => {
                       >
                         {task.type}
                       </Badge>
+                      {task.scheduledDate && (
+                        <Badge
+                          variant="outline"
+                          className={getDateBadgeColor(task.scheduledDate)}
+                        >
+                          {formatRelativeDate(task.scheduledDate)}
+                        </Badge>
+                      )}
                       {task.status === 'completed' && (
                         <Badge variant="outline" className="bg-success-subtle text-success border-success/30">
                           <Check className="w-3 h-3 mr-1" />
@@ -362,6 +485,6 @@ export const Tasks = ({ onStartFocus }) => {
           ))
         )}
       </div>
-    </div>
+    </div >
   );
 };

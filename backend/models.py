@@ -36,6 +36,7 @@ class TaskCreate(BaseModel):
     type: TaskType
     techTags: List[str] = []
     estimatedTime: int
+    scheduledDate: Optional[str] = None  # ISO date string: "2026-01-15"
 
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
@@ -43,6 +44,7 @@ class TaskUpdate(BaseModel):
     techTags: Optional[List[str]] = None
     estimatedTime: Optional[int] = None
     status: Optional[TaskStatus] = None
+    scheduledDate: Optional[str] = None
 
 class TaskResponse(BaseModel):
     id: str
@@ -55,6 +57,7 @@ class TaskResponse(BaseModel):
     status: str
     createdAt: str
     updatedAt: str
+    scheduledDate: Optional[str] = None
 
 class FocusSessionCreate(BaseModel):
     taskId: str
@@ -123,9 +126,63 @@ class SmartPlanResponse(BaseModel):
     recommended_capacity: float
     description: str
 
-class InsightsCacheResponse(BaseModel):
-    weekly_insights: List[InsightResponse]
-    monthly_insights: List[InsightResponse]
-    burnout_detection: Optional[BurnoutDetectionResponse] = None
-    smart_plan: SmartPlanResponse
     generated_at: str
+
+class RoomMemberStatus(str, Enum):
+    PENDING = "pending"
+    MEMBER = "member"
+    ADMIN = "admin"
+
+class RoomMember(BaseModel):
+    userId: str
+    name: str
+    status: RoomMemberStatus = RoomMemberStatus.PENDING
+    joinedAt: str
+
+class ChatMessage(BaseModel):
+    id: str
+    userId: str
+    userName: str
+    content: str
+    timestamp: str
+
+class RoomTask(BaseModel):
+    id: str
+    title: str
+    status: TaskStatus = TaskStatus.TODO
+    assignedTo: Optional[str] = None # User Name
+    createdBy: str
+    createdAt: str
+
+class FocusRoomCreate(BaseModel):
+    name: str
+    password: str # New: Required for all rooms now for simplicity, or optional
+    description: Optional[str] = None
+
+class SharedTaskCreate(BaseModel):
+    title: str
+
+class JoinRoomRequest(BaseModel):
+    password: str
+
+class FocusRoomResponse(BaseModel):
+    roomId: str
+    name: str
+    description: Optional[str] = None
+    ownerId: str
+    ownerName: Optional[str] = None # For UI display
+    isPrivate: bool = True 
+    activeUsers: List[Dict] = [] 
+    members: List[RoomMember] = [] 
+    pendingRequests: List[RoomMember] = [] 
+    tasks: List[RoomTask] = []
+    chatHistory: List[ChatMessage] = []
+    createdAt: str
+    # New Fields for Persistence & Expiry
+    expiresAt: Optional[str] = None
+    timerStartTime: Optional[str] = None
+    timerDuration: Optional[int] = None
+    timerStatus: Optional[str] = "stopped" # running, paused, stopped
+
+class RoomSessionLog(BaseModel):
+    duration: int

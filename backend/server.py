@@ -19,6 +19,7 @@ async def lifespan(app: FastAPI):
     await close_mongo_connection()
 
 app = FastAPI(lifespan=lifespan)
+# Triggering reload for RoomSessionLog fix
 
 app.add_middleware(
     CORSMiddleware,
@@ -97,7 +98,8 @@ async def create_task(task_data: TaskCreate, current_user: TokenData = Depends(g
         "totalFocusedTime": 0,
         "status": TaskStatus.TODO.value,
         "createdAt": datetime.utcnow().isoformat(),
-        "updatedAt": datetime.utcnow().isoformat()
+        "updatedAt": datetime.utcnow().isoformat(),
+        "scheduledDate": task_data.scheduledDate
     }
     
     result = await db.tasks.insert_one(task_dict)
@@ -123,7 +125,8 @@ async def get_tasks(current_user: TokenData = Depends(get_current_user)):
             totalFocusedTime=task.get("totalFocusedTime", 0),
             status=task["status"],
             createdAt=task["createdAt"],
-            updatedAt=task["updatedAt"]
+            updatedAt=task["updatedAt"],
+            scheduledDate=task.get("scheduledDate")
         )
         for task in tasks
     ]
@@ -156,7 +159,8 @@ async def update_task(task_id: str, task_data: TaskUpdate, current_user: TokenDa
         totalFocusedTime=updated_task.get("totalFocusedTime", 0),
         status=updated_task["status"],
         createdAt=updated_task["createdAt"],
-        updatedAt=updated_task["updatedAt"]
+        updatedAt=updated_task["updatedAt"],
+        scheduledDate=updated_task.get("scheduledDate")
     )
 
 @app.delete("/api/tasks/{task_id}")
@@ -286,60 +290,9 @@ async def get_heatmap(current_user: TokenData = Depends(get_current_user)):
         for entry in entries
     ]
 
-@app.get("/api/rooms", response_model=List[FocusRoomResponse])
-async def get_focus_rooms():
-    db = get_database()
-    rooms = await db.focus_rooms.find({"isPrivate": False}).to_list(50)
-    
-    return [
-        FocusRoomResponse(
-            roomId=str(room["_id"]),
-            name=room["name"],
-            isPrivate=room["isPrivate"],
-            activeUsers=room.get("activeUsers", []),
-            createdAt=room["createdAt"]
-        )
-        for room in rooms
-    ]
-
-@app.post("/api/rooms", response_model=FocusRoomResponse)
-async def create_focus_room(room_data: FocusRoomCreate, current_user: TokenData = Depends(get_current_user)):
-    db = get_database()
-    
-    room_dict = {
-        "name": room_data.name,
-        "isPrivate": room_data.isPrivate,
-        "activeUsers": [],
-        "createdAt": datetime.utcnow().isoformat()
-    }
-    
-    result = await db.focus_rooms.insert_one(room_dict)
-    room_dict["roomId"] = str(result.inserted_id)
-    
-    return FocusRoomResponse(**room_dict)
-
-@app.websocket("/api/ws/room/{room_id}")
-async def websocket_room(websocket: WebSocket, room_id: str):
-    await websocket.accept()
-    
-    if room_id not in active_connections:
-        active_connections[room_id] = []
-    
-    active_connections[room_id].append(websocket)
-    
-    try:
-        while True:
-            data = await websocket.receive_text()
-            message = json.loads(data)
-            
-            for connection in active_connections[room_id]:
-                if connection != websocket:
-                    await connection.send_text(json.dumps(message))
-    
-    except WebSocketDisconnect:
-        active_connections[room_id].remove(websocket)
-        if not active_connections[room_id]:
-            del active_connections[room_id]
+# --- ROUTES ---
+from rooms_router import router as rooms_router
+app.include_router(rooms_router)
 
 @app.get("/api/insights")
 async def get_insights(current_user: TokenData = Depends(get_current_user)):
