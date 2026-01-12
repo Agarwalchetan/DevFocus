@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, ListTodo, Clock, Activity, Users, LogOut, Flame, Lightbulb } from 'lucide-react';
+import { LayoutDashboard, ListTodo, Clock, Activity, Users, LogOut, Flame, Lightbulb, History } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,6 +12,7 @@ export const Navbar = ({ currentPage, onNavigate }) => {
     { id: 'tasks', label: 'Tasks', icon: ListTodo },
     { id: 'focus', label: 'Focus', icon: Clock },
     { id: 'insights', label: 'Insights', icon: Lightbulb },
+    { id: 'history', label: 'History', icon: History },
     { id: 'heatmap', label: 'Heatmap', icon: Activity },
     { id: 'rooms', label: 'Rooms', icon: Users },
   ];
@@ -37,11 +38,10 @@ export const Navbar = ({ currentPage, onNavigate }) => {
                   <button
                     key={item.id}
                     onClick={() => onNavigate(item.id)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                      isActive
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${isActive
                         ? 'bg-primary text-primary-foreground'
                         : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
-                    }`}
+                      }`}
                   >
                     <Icon className="w-4 h-4" />
                     <span className="text-sm font-medium">{item.label}</span>
@@ -80,11 +80,10 @@ export const Navbar = ({ currentPage, onNavigate }) => {
               <button
                 key={item.id}
                 onClick={() => onNavigate(item.id)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
-                  isActive
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${isActive
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
-                }`}
+                  }`}
               >
                 <Icon className="w-4 h-4" />
                 <span className="text-sm">{item.label}</span>

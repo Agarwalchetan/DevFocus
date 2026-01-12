@@ -420,6 +420,135 @@ async def get_smart_plan(current_user: TokenData = Depends(get_current_user)):
     
     return {"plan": plan}
 
+@app.get("/api/history/tasks")
+async def get_task_history(current_user: TokenData = Depends(get_current_user)):
+    """Get all tasks with their focus session data"""
+    db = get_database()
+    user = await db.users.find_one({"email": current_user.email})
+    
+    tasks = await db.tasks.find({"userId": str(user["_id"])}).sort("updatedAt", -1).to_list(None)
+    
+    result = []
+    for task in tasks:
+        # Get session count for this task
+        session_count = await db.focus_sessions.count_documents({
+            "taskId": str(task["_id"]),
+            "completed": True
+        })
+        
+        result.append({
+            "id": str(task["_id"]),
+            "title": task["title"],
+            "type": task["type"],
+            "techTags": task["techTags"],
+            "estimatedTime": task["estimatedTime"],
+            "totalFocusedTime": task.get("totalFocusedTime", 0),
+            "status": task["status"],
+            "sessionCount": session_count,
+            "createdAt": task["createdAt"],
+            "updatedAt": task["updatedAt"]
+        })
+    
+    return {"tasks": result}
+
+@app.get("/api/history/sessions")
+async def get_session_history(current_user: TokenData = Depends(get_current_user)):
+    """Get all focus sessions with task details"""
+    db = get_database()
+    user = await db.users.find_one({"email": current_user.email})
+    
+    from bson import ObjectId
+    sessions = await db.focus_sessions.find({
+        "userId": str(user["_id"]),
+        "completed": True
+    }).sort("startTime", -1).to_list(None)
+    
+    result = []
+    for session in sessions:
+        # Get task details
+        task = await db.tasks.find_one({"_id": ObjectId(session["taskId"])})
+        
+        result.append({
+            "id": str(session["_id"]),
+            "taskId": session["taskId"],
+            "taskTitle": task["title"] if task else "Unknown Task",
+            "taskType": task["type"] if task else "Coding",
+            "startTime": session["startTime"],
+            "endTime": session.get("endTime"),
+            "duration": session["duration"],
+            "completed": session["completed"]
+        })
+    
+    return {"sessions": result}
+
+@app.get("/api/history/analytics")
+async def get_history_analytics(current_user: TokenData = Depends(get_current_user)):
+    """Get comprehensive analytics from task and session history"""
+    db = get_database()
+    user = await db.users.find_one({"email": current_user.email})
+    
+    from collections import Counter
+    
+    # Get all tasks
+    tasks = await db.tasks.find({"userId": str(user["_id"])}).to_list(None)
+    
+    # Get all completed sessions
+    sessions = await db.focus_sessions.find({
+        "userId": str(user["_id"]),
+        "completed": True
+    }).to_list(None)
+    
+    # Calculate tech tag usage
+    tech_tags_counter = Counter()
+    for task in tasks:
+        for tag in task.get("techTags", []):
+            tech_tags_counter[tag] += task.get("totalFocusedTime", 0)
+    
+    most_used_tags = [
+        {"name": tag, "minutes": minutes}
+        for tag, minutes in tech_tags_counter.most_common(10)
+    ]
+    
+    # Calculate task type distribution
+    type_counter = Counter()
+    for task in tasks:
+        type_counter[task["type"]] += task.get("totalFocusedTime", 0)
+    
+    task_type_distribution = [
+        {"type": task_type, "minutes": minutes}
+        for task_type, minutes in type_counter.items()
+    ]
+    
+    # Calculate productivity metrics
+    total_tasks = len(tasks)
+    completed_tasks = len([t for t in tasks if t["status"] == "completed"])
+    total_focus_time = sum(task.get("totalFocusedTime", 0) for task in tasks)
+    total_sessions = len(sessions)
+    avg_session_duration = sum(s["duration"] for s in sessions) / total_sessions if total_sessions > 0 else 0
+    completion_rate = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
+    
+    # Get recent activity (last 30 days)
+    from datetime import datetime, timedelta
+    thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
+    
+    recent_sessions = [s for s in sessions if s.get("startTime", "") >= thirty_days_ago]
+    recent_focus_time = sum(s["duration"] for s in recent_sessions)
+    
+    return {
+        "mostUsedTags": most_used_tags,
+        "taskTypeDistribution": task_type_distribution,
+        "productivityMetrics": {
+            "totalTasks": total_tasks,
+            "completedTasks": completed_tasks,
+            "totalFocusTime": total_focus_time,
+            "totalSessions": total_sessions,
+            "avgSessionDuration": round(avg_session_duration, 1),
+            "completionRate": round(completion_rate, 1),
+            "recentFocusTime": recent_focus_time,
+            "recentSessions": len(recent_sessions)
+        }
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)

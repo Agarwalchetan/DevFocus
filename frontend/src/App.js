@@ -8,6 +8,7 @@ import { FocusTimer } from './pages/FocusTimer';
 import { Heatmap } from './pages/Heatmap';
 import { FocusRooms } from './pages/FocusRooms';
 import { Insights } from './pages/Insights';
+import { History } from './pages/History';
 import { Navbar } from './components/Navbar';
 
 function AppContent() {
@@ -40,7 +41,7 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar currentPage={currentPage} onNavigate={setCurrentPage} />
-      
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {currentPage === 'dashboard' && (
           <Dashboard onNavigate={setCurrentPage} onStartFocus={handleStartFocus} />
@@ -52,6 +53,7 @@ function AppContent() {
         {currentPage === 'heatmap' && <Heatmap />}
         {currentPage === 'rooms' && <FocusRooms />}
         {currentPage === 'insights' && <Insights onNavigate={setCurrentPage} onStartFocus={handleStartFocus} />}
+        {currentPage === 'history' && <History />}
       </main>
     </div>
   );
