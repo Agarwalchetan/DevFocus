@@ -1,9 +1,18 @@
 from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict
 import json
+import bcrypt
+# Monkey patch bcrypt for passlib compatibility
+if not hasattr(bcrypt, '__about__'):
+    try:
+        from collections import namedtuple
+        Version = namedtuple("Version", ["__version__"])
+        bcrypt.__about__ = Version(bcrypt.__version__)
+    except Exception:
+        pass
 
 from database import connect_to_mongo, close_mongo_connection, get_database
 from models import *
@@ -48,7 +57,7 @@ async def register(user_data: UserCreate):
         "streakCount": 0,
         "totalFocusMinutes": 0,
         "lastFocusDate": None,
-        "createdAt": datetime.utcnow().isoformat()
+        "createdAt": datetime.now(timezone.utc).isoformat()
     }
     
     result = await db.users.insert_one(user_dict)
@@ -97,8 +106,8 @@ async def create_task(task_data: TaskCreate, current_user: TokenData = Depends(g
         "estimatedTime": task_data.estimatedTime,
         "totalFocusedTime": 0,
         "status": TaskStatus.TODO.value,
-        "createdAt": datetime.utcnow().isoformat(),
-        "updatedAt": datetime.utcnow().isoformat(),
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "updatedAt": datetime.now(timezone.utc).isoformat(),
         "scheduledDate": task_data.scheduledDate
     }
     

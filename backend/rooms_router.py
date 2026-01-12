@@ -266,8 +266,6 @@ async def update_room_task(room_id: str, task_id: str, update: TaskUpdate, curre
     update_fields = {}
     if update.status:
         update_fields["tasks.$.status"] = update.status
-    if update.assignedTo:
-         update_fields["tasks.$.assignedTo"] = update.assignedTo
          
     if not update_fields:
         return {"message": "No updates"}

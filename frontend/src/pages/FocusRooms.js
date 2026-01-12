@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { User, Lock, Plus, MessageSquare, CheckSquare, Clock, Users, Send, Play, Pause, RotateCcw, Crown, AlertOctagon } from "lucide-react";
+import { User, Lock, Plus, MessageSquare, CheckSquare, Clock, Users, Send, Play, Pause, RotateCcw, Crown, AlertOctagon, ChevronLeft, ChevronRight, Sidebar } from "lucide-react";
 import { useWebSocket } from '../hooks/useCustomHooks';
 
 export const FocusRooms = () => {
@@ -36,6 +36,10 @@ export const FocusRooms = () => {
   const [chatMessage, setChatMessage] = useState('');
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const chatScrollRef = useRef(null);
+
+  // Layout State
+  const [isLeftOpen, setIsLeftOpen] = useState(true);
+  const [isRightOpen, setIsRightOpen] = useState(true);
 
   const token = localStorage.getItem('token');
   const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
@@ -280,6 +284,17 @@ export const FocusRooms = () => {
     } catch (e) { console.error("Logging failed", e); }
   }, [API_URL, token, currentRoom?.roomId]);
 
+  // Timer Actions (Admin)
+  const controlTimer = useCallback(async (action, duration = 25) => {
+    try {
+      if (!currentRoom?.roomId) return;
+      await fetch(`${API_URL}/api/rooms/${currentRoom.roomId}/timer?action=${action}&duration=${duration}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (e) { toast.error("Action failed"); }
+  }, [API_URL, token, currentRoom?.roomId]);
+
   // Timer Tick
   useEffect(() => {
     let interval;
@@ -303,18 +318,10 @@ export const FocusRooms = () => {
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [timerStatus, timeLeft, currentRoom?.status, currentRoom?.timerDuration, logSession]);
+  }, [timerStatus, timeLeft, currentRoom?.status, currentRoom?.timerDuration, logSession, controlTimer]);
 
 
-  // Timer Actions (Admin)
-  const controlTimer = async (action, duration = 25) => {
-    try {
-      await fetch(`${API_URL}/api/rooms/${currentRoom.roomId}/timer?action=${action}&duration=${duration}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-    } catch (e) { toast.error("Action failed"); }
-  };
+
 
   const createRoom = async (e) => {
     e.preventDefault();
@@ -443,207 +450,217 @@ export const FocusRooms = () => {
       )
     }
 
-    // ACTIVE ROOM VIEW - SINGLE PAGE GRID LAYOUT
+    // ACTIVE ROOM VIEW - NEW FLEX LAYOUT
     return (
-      <div className="h-[calc(100vh-6rem)] flex flex-col gap-4">
-        {/* Room Header */}
-        <div className="flex items-center justify-between bg-card border border-border p-4 rounded-lg shrink-0">
-          <div>
-            <h2 className="text-2xl font-bold flex items-center gap-2">
-              {currentRoom.name}
-              <Badge variant="secondary" className="text-xs font-normal">
-                <Clock className="w-3 h-3 mr-1" /> Closes in {hoursLeft}h
-              </Badge>
-            </h2>
-            <p className="text-muted-foreground text-sm">{currentRoom.description || "Focus Community"}</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setCurrentRoom(null)}>Leave Room</Button>
-          </div>
-        </div>
+      <div className="h-[calc(100vh-6rem)] flex overflow-hidden border rounded-xl bg-background shadow-sm relative">
 
-        {/* 3-Column Grid Layout */}
-        <div className="flex-1 grid grid-cols-12 gap-4 min-h-0">
+        {/* LEFT SIDEBAR: Requests & Tasks */}
+        <div className={`flex flex-col border-r bg-card transition-all duration-300 ease-in-out relative ${isLeftOpen ? 'w-80' : 'w-0 opacity-0'} shrink-0`}>
+          <div className="flex items-center justify-between p-3 border-b h-14 shrink-0 overflow-hidden">
+            <h3 className="font-semibold flex items-center gap-2"><CheckSquare className="w-4 h-4" /> Room Tasks</h3>
+            <Button variant="ghost" size="icon" onClick={() => setIsLeftOpen(false)}><ChevronLeft className="w-4 h-4" /></Button>
+          </div>
 
-          {/* COLUMN 1: Participants & Admin (3 Cols) */}
-          <div className="col-span-12 md:col-span-3 flex flex-col gap-4 min-h-0">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-4 min-w-[20rem]">
             {/* Admin Requests Panel */}
-            {isOwner && (
-              <Card className="shrink-0 max-h-[40%] flex flex-col">
-                <CardHeader className="py-3 px-4"><CardTitle className="text-md">Join Requests ({currentRoom.pendingRequests?.length || 0})</CardTitle></CardHeader>
-                <CardContent className="flex-1 overflow-y-auto p-2">
-                  {currentRoom.pendingRequests?.length > 0 ? (
-                    <div className="space-y-2">
-                      {currentRoom.pendingRequests.map(req => (
-                        <div key={req.userId} className="flex flex-col gap-2 p-2 border rounded-md bg-secondary/20">
-                          <div className="flex items-center gap-2">
-                            <User className="w-3 h-3" /> <span className="text-sm font-medium">{req.name}</span>
-                          </div>
-                          <Button size="sm" className="h-7 text-xs w-full" onClick={() => approveMember(req.userId)}>Approve</Button>
-                        </div>
-                      ))}
+            {isOwner && currentRoom.pendingRequests?.length > 0 && (
+              <Card className="shrink-0 bg-secondary/10 border-dashed border-orange-200">
+                <CardHeader className="py-2 px-3"><CardTitle className="text-xs font-bold text-orange-600 uppercase tracking-wider">Join Requests ({currentRoom.pendingRequests.length})</CardTitle></CardHeader>
+                <CardContent className="p-2 space-y-2">
+                  {currentRoom.pendingRequests.map(req => (
+                    <div key={req.userId} className="flex flex-col gap-1.5 p-2 border rounded-md bg-background">
+                      <div className="flex items-center gap-2">
+                        <User className="w-3 h-3" /> <span className="text-xs font-medium truncate">{req.name}</span>
+                      </div>
+                      <Button size="sm" className="h-6 text-[10px] w-full" onClick={() => approveMember(req.userId)}>Approve</Button>
                     </div>
-                  ) : <p className="text-xs text-muted-foreground text-center py-2">No pending requests</p>}
+                  ))}
                 </CardContent>
               </Card>
             )}
 
-            {/* Participants List */}
-            <Card className="flex-1 flex flex-col min-h-0">
-              <CardHeader className="py-3 px-4"><CardTitle className="text-md">Participants ({currentRoom.members?.length})</CardTitle></CardHeader>
-              <CardContent className="flex-1 overflow-y-auto p-2">
-                <div className="space-y-2">
+            {/* Tasks List */}
+            <div className="space-y-3">
+              <div className="space-y-2">
+                {(() => {
+                  const displayedTasks = [
+                    ...(currentRoom.tasks || []).map(t => ({ ...t, source: 'room', label: 'Shared' })),
+                    ...personalTasks.map(t => ({ ...t, source: 'personal', label: 'Personal', createdBy: 'You' }))
+                  ];
+                  if (displayedTasks.length === 0) return <div className="text-center py-8 text-muted-foreground/40 text-sm">No tasks yet</div>;
+
+                  return displayedTasks.map((task, i) => (
+                    <div key={task.id || i} className={`flex items-start gap-2 p-2 text-sm border rounded-lg group hover:bg-secondary/30 transition-colors ${task.source === 'personal' ? 'bg-blue-500/5 border-blue-200/20' : 'bg-card'}`}>
+                      <button onClick={() => toggleTaskStatus(task)} className={`mt-0.5 w-4 h-4 shrink-0 rounded border flex items-center justify-center transition-all ${task.status === 'completed' ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground hover:border-primary'}`}>
+                        {task.status === 'completed' && <CheckSquare className="w-3 h-3" />}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start gap-1">
+                          <p className={`truncate font-medium text-xs leading-5 ${task.status === 'completed' ? 'line-through text-muted-foreground' : ''}`}>{task.title}</p>
+                          {task.source === 'personal' && <Badge variant="outline" className="text-[8px] h-3 px-0.5 text-blue-400 border-blue-400/30">ME</Badge>}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                })()}
+              </div>
+
+              {/* Add Task Form */}
+              <form onSubmit={addTask} className="pt-2 flex flex-col gap-2 border-t mt-2">
+                <div className="flex gap-4 text-xs px-1">
+                  <label className="flex items-center gap-1 cursor-pointer hover:text-primary transition-colors">
+                    <input type="radio" name="taskType" value="shared" checked={newTaskType === 'shared'} onChange={() => setNewTaskType('shared')} className="accent-primary" />
+                    Shared
+                  </label>
+                  <label className="flex items-center gap-1 cursor-pointer hover:text-primary transition-colors">
+                    <input type="radio" name="taskType" value="personal" checked={newTaskType === 'personal'} onChange={() => setNewTaskType('personal')} className="accent-primary" />
+                    Personal
+                  </label>
+                </div>
+                <div className="flex gap-2">
+                  <Input placeholder={newTaskType === 'shared' ? "New room task..." : "New personal task..."} value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} className="h-8 text-xs bg-background" />
+                  <Button type="submit" size="sm" className="h-8 w-8 p-0 shrink-0"><Plus className="w-4 h-4" /></Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        {/* CENTER STAGE */}
+        <div className="flex-1 flex flex-col relative min-w-0 bg-secondary/5">
+          {/* Top Overlay Bar */}
+          <div className="absolute top-4 left-4 right-4 z-10 flex justify-between items-start pointer-events-none">
+            <div className="pointer-events-auto">
+              {!isLeftOpen && (
+                <Button variant="outline" size="icon" className="shadow-sm bg-background/80 backdrop-blur" onClick={() => setIsLeftOpen(true)}>
+                  <Sidebar className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+
+            {/* Room Info Bubble */}
+            <div className="bg-background/80 backdrop-blur border shadow-sm rounded-full px-4 py-1.5 flex flex-col items-center pointer-events-auto">
+              <h2 className="font-bold text-sm flex items-center gap-2">
+                {currentRoom.name}
+                {currentRoom.isPrivate && <Lock className="w-3 h-3 text-muted-foreground" />}
+              </h2>
+              <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                <Clock className="w-3 h-3" /> Closes in {hoursLeft}h
+              </span>
+            </div>
+
+            <div className="pointer-events-auto flex gap-2">
+              <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 h-8" onClick={() => setCurrentRoom(null)}>Leave</Button>
+              {!isRightOpen && (
+                <Button variant="outline" size="icon" className="shadow-sm bg-background/80 backdrop-blur" onClick={() => setIsRightOpen(true)}>
+                  <Sidebar className="w-4 h-4 scale-x-[-1]" />
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Focus Timer Area */}
+          <div className="flex-1 flex items-center justify-center">
+            <div className="flex flex-col items-center scale-110 md:scale-125 transition-transform duration-500">
+              <div className={`text-[10rem] leading-none font-black font-mono tracking-tighter tabular-nums select-none drop-shadow-2xl transition-all duration-300 ${timerStatus === 'running' ? 'text-primary' : 'text-muted-foreground/30'}`}>
+                {formatTime(timeLeft)}
+              </div>
+
+              <div className="h-24 mt-8 flex items-center justify-center">
+                {isOwner ? (
+                  <div className="flex flex-col gap-4 items-center w-64">
+                    <div className="grid grid-cols-2 gap-3 w-full">
+                      {timerStatus === 'running' ? (
+                        <Button size="lg" onClick={() => controlTimer('pause')} className="w-full col-span-2 shadow-lg bg-orange-500 hover:bg-orange-600 border-none h-12 rounded-full text-lg transition-all hover:scale-105">
+                          <Pause className="w-5 h-5 mr-2 fill-current" /> Pause
+                        </Button>
+                      ) : (
+                        <Button size="lg" onClick={() => controlTimer('start', 25)} className="w-full col-span-2 shadow-xl shadow-primary/20 h-12 rounded-full text-lg transition-all hover:scale-105">
+                          <Play className="w-5 h-5 mr-2 fill-current" /> Start Focus
+                        </Button>
+                      )}
+                    </div>
+                    <div className="flex gap-2 w-full justify-center opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity">
+                      <Button variant="outline" size="icon" className="rounded-full w-8 h-8" onClick={() => controlTimer('reset')} title="Reset"><RotateCcw className="w-3 h-3" /></Button>
+                      {[15, 25, 45, 60].map(m => (
+                        <Button key={m} variant="ghost" size="sm" onClick={() => controlTimer('start', m)} className={`text-xs rounded-full h-8 w-8 p-0 ${timeLeft === m * 60 ? "bg-primary/20 text-primary font-bold" : ""}`}>
+                          {m}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <Badge variant="outline" className="px-3 py-1 text-sm rounded-full border-primary/20 text-primary mb-2">
+                      {timerStatus === 'running' ? 'FOCUS SESSION ACTIVE' : 'SESSION PAUSED'}
+                    </Badge>
+                    <p className="text-xs text-muted-foreground">Syncing with workspace...</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT SIDEBAR: Participants & Chat */}
+        <div className={`flex flex-col border-l bg-card transition-all duration-300 ease-in-out relative ${isRightOpen ? 'w-80' : 'w-0 opacity-0'} shrink-0`}>
+          <div className="flex items-center justify-between p-3 border-b h-14 shrink-0 overflow-hidden">
+            <Button variant="ghost" size="icon" onClick={() => setIsRightOpen(false)}><ChevronRight className="w-4 h-4" /></Button>
+            <h3 className="font-semibold flex items-center gap-2">Community <Users className="w-4 h-4" /></h3>
+          </div>
+
+          <div className="flex-1 flex flex-col min-h-0 min-w-[20rem]">
+            {/* Top Half: Participants */}
+            <div className="h-1/3 border-b flex flex-col">
+              <div className="px-3 py-2 text-xs font-semibold text-muted-foreground bg-muted/30">Active Members ({currentRoom.members?.length})</div>
+              <ScrollArea className="flex-1">
+                <div className="p-2 space-y-1">
                   {currentRoom.members?.map(m => (
-                    <div key={m.userId} className="flex items-center gap-2 p-2 rounded-md hover:bg-secondary/50">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
+                    <div key={m.userId} className="flex items-center gap-2 p-2 rounded-md hover:bg-secondary/50 text-sm group">
+                      <div className="w-7 h-7 rounded-sm bg-primary/10 flex items-center justify-center text-primary font-bold text-xs relative">
                         {m.name.charAt(0)}
+                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 border-2 border-background bg-green-500 rounded-full"></div>
                       </div>
                       <div className="flex-1 overflow-hidden">
-                        <p className="text-sm font-medium truncate flex items-center gap-1">
-                          {m.name}
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium truncate">{m.name}</span>
                           {currentRoom.ownerId === m.userId && <Crown className="w-3 h-3 text-yellow-500 fill-yellow-500" />}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground capitalize">{m.status}</p>
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              </ScrollArea>
+            </div>
 
-          {/* COLUMN 2: Focus Timer (5 Cols) */}
-          <div className="col-span-12 md:col-span-5 flex flex-col min-h-0">
-            <Card className="flex-1 flex flex-col items-center justify-center py-8 relative overflow-hidden bg-gradient-to-b from-card to-secondary/10">
-              <div className="absolute top-4 right-4 flex flex-col gap-1 text-right">
-                <Badge variant="outline" className={`${timerStatus === 'running' ? 'bg-green-500/10 text-green-500 border-green-500/20' : ''}`}>
-                  {timerStatus === 'running' ? 'LIVE' : 'PAUSED'}
-                </Badge>
-              </div>
+            {/* Bottom Half: Chat */}
+            <div className="flex-1 flex flex-col min-h-0 bg-secondary/5">
+              <div className="px-3 py-2 text-xs font-semibold text-muted-foreground bg-muted/30 flex items-center gap-2"><MessageSquare className="w-3 h-3" /> Room Chat</div>
 
-              <div className={`text-9xl font-black font-mono tracking-tighter mb-8 tabular-nums select-none ${timerStatus === 'running' ? 'text-primary drop-shadow-lg' : 'text-muted-foreground opacity-50'}`}>
-                {formatTime(timeLeft)}
-              </div>
-
-              {isOwner ? (
-                <div className="flex flex-col gap-6 items-center w-full max-w-xs z-10">
-                  <div className="grid grid-cols-2 gap-3 w-full">
-                    {timerStatus === 'running' ? (
-                      <Button size="lg" onClick={() => controlTimer('pause')} className="w-full col-span-2 shadow-lg bg-orange-500 hover:bg-orange-600 border-none h-14 text-lg">
-                        <Pause className="w-5 h-5 mr-2 fill-current" /> Pause
-                      </Button>
-                    ) : (
-                      <Button size="lg" onClick={() => controlTimer('start', 25)} className="w-full col-span-2 shadow-lg h-14 text-lg animate-pulse hover:animate-none">
-                        <Play className="w-5 h-5 mr-2 fill-current" /> Start Focus
-                      </Button>
-                    )}
-                  </div>
-                  <div className="flex gap-2 w-full justify-center">
-                    <Button variant="outline" size="icon" onClick={() => controlTimer('reset')} title="Reset"><RotateCcw className="w-4 h-4" /></Button>
-                    <div className="w-px bg-border h-8 mx-2"></div>
-                    {[15, 25, 45, 60].map(m => (
-                      <Button key={m} variant="secondary" size="sm" onClick={() => controlTimer('start', m)} className={timeLeft === m * 60 ? "bg-primary/20 text-primary" : ""}>
-                        {m}m
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center space-y-2">
-                  <p className="text-lg font-medium text-muted-foreground">
-                    {timerStatus === 'running' ? "Focus Session in Progress" : "Session Paused"}
-                  </p>
-                  <p className="text-sm text-muted-foreground/60">Wait for the admin to control the timer.</p>
-                </div>
-              )}
-            </Card>
-          </div>
-
-          {/* COLUMN 3: Tasks & Chat (4 Cols - Stacked 50/50) */}
-          <div className="col-span-12 md:col-span-4 flex flex-col gap-4 min-h-0">
-
-            {/* Tasks Panel */}
-            <Card className="flex-1 flex flex-col min-h-0 basis-1/2">
-              <CardHeader className="py-3 px-4 border-b flex flex-row items-center justify-between space-y-0">
-                <CardTitle className="text-md flex items-center gap-2"><CheckSquare className="w-4 h-4" /> Tasks</CardTitle>
-                <Badge variant="secondary" className="text-[10px]">{currentRoom.tasks?.filter(t => t.status === 'completed').length}/{currentRoom.tasks?.length}</Badge>
-              </CardHeader>
-              <CardContent className="flex-1 overflow-hidden flex flex-col p-2">
-                <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                  {(() => {
-                    const displayedTasks = [
-                      ...(currentRoom.tasks || []).map(t => ({ ...t, source: 'room', label: 'Shared' })),
-                      ...personalTasks.map(t => ({ ...t, source: 'personal', label: 'Personal', createdBy: 'You' }))
-                    ];
-
-                    if (displayedTasks.length === 0) return <div className="h-full flex items-center justify-center opacity-30 text-4xl"><CheckSquare /></div>;
-
-                    return displayedTasks.map((task, i) => (
-                      <div key={task.id || i} className={`flex items-start gap-2 p-2 text-sm border rounded-lg group hover:bg-secondary/30 transition-colors ${task.source === 'personal' ? 'bg-blue-500/5 border-blue-200/20' : 'bg-card/50'}`}>
-                        <button
-                          onClick={() => toggleTaskStatus(task)}
-                          className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center ${task.status === 'completed' ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground'}`}
-                        >
-                          {task.status === 'completed' && <CheckSquare className="w-3 h-3" />}
-                        </button>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start">
-                            <p className={`truncate font-medium ${task.status === 'completed' ? 'line-through text-muted-foreground' : ''}`}>{task.title}</p>
-                            {task.source === 'personal' && <Badge variant="outline" className="text-[9px] h-4 px-1 text-blue-400 border-blue-400/30">Personal</Badge>}
-                          </div>
-                          <p className="text-[10px] text-muted-foreground">by {task.createdBy}</p>
-                        </div>
+              <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-3 space-y-3">
+                {[...(currentRoom.chatHistory || []), ...messages.filter(m => m.type === 'chat_message').filter(m => !currentRoom.chatHistory?.find(c => c.id === m.id))].map(msg => {
+                  const isMe = msg.userId === (user.id || user._id);
+                  return (
+                    <div key={msg.id || Math.random()} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-xs ${isMe ? 'bg-primary text-primary-foreground rounded-br-none' : 'bg-white border shadow-sm rounded-bl-none'}`}>
+                        {!isMe && <p className="text-[9px] font-bold opacity-70 mb-0.5 text-primary">{msg.userName}</p>}
+                        <p className="leading-snug">{msg.content}</p>
                       </div>
-                    ))
-                  })()}
-                </div>
-                <form onSubmit={addTask} className="mt-2 flex flex-col gap-2">
-                  <div className="flex gap-4 text-xs">
-                    <label className="flex items-center gap-1 cursor-pointer">
-                      <input type="radio" name="taskType" value="shared" checked={newTaskType === 'shared'} onChange={() => setNewTaskType('shared')} />
-                      Room Task
-                    </label>
-                    <label className="flex items-center gap-1 cursor-pointer">
-                      <input type="radio" name="taskType" value="personal" checked={newTaskType === 'personal'} onChange={() => setNewTaskType('personal')} />
-                      Personal Task
-                    </label>
-                  </div>
-                  <div className="flex gap-2">
-                    <Input placeholder={newTaskType === 'shared' ? "New room task..." : "New personal task..."} value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} className="h-8 text-sm" />
-                    <Button type="submit" size="sm" className="h-8 w-8 p-0"><Plus className="w-4 h-4" /></Button>
-                  </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="p-3 bg-card border-t">
+                <form onSubmit={sendMessageHandler} className="flex gap-2 relative">
+                  <Input value={chatMessage} onChange={e => setChatMessage(e.target.value)} placeholder="Type a message..." className="h-9 text-sm pr-8" />
+                  <Button type="submit" size="sm" className="absolute right-1 top-1 h-7 w-7 p-0 rounded-full"><Send className="w-3 h-3" /></Button>
                 </form>
-              </CardContent>
-            </Card>
-
-            {/* Chat Panel */}
-            <Card className="flex-1 flex flex-col min-h-0 basis-1/2">
-              <CardHeader className="py-3 px-4 border-b"><CardTitle className="text-md flex items-center gap-2"><MessageSquare className="w-4 h-4" /> Chat</CardTitle></CardHeader>
-              <CardContent className="flex-1 p-0 flex flex-col min-h-0">
-                <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-3 space-y-3 bg-secondary/5">
-                  {[...(currentRoom.chatHistory || []), ...messages.filter(m => m.type === 'chat_message').filter(m => !currentRoom.chatHistory?.find(c => c.id === m.id))].map(msg => {
-                    const isMe = msg.userId === (user.id || user._id);
-                    return (
-                      <div key={msg.id || Math.random()} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm ${isMe ? 'bg-primary text-primary-foreground rounded-br-none' : 'bg-muted rounded-bl-none'}`}>
-                          {!isMe && <p className="text-[10px] font-bold opacity-70 mb-0.5">{msg.userName}</p>}
-                          <p className="leading-tight">{msg.content}</p>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-                <div className="p-2 border-t bg-card">
-                  <form onSubmit={sendMessageHandler} className="flex gap-2">
-                    <Input value={chatMessage} onChange={e => setChatMessage(e.target.value)} placeholder="Message..." className="h-8 text-sm" />
-                    <Button type="submit" size="sm" className="h-8 w-8 p-0"><Send className="w-3 h-3" /></Button>
-                  </form>
-                </div>
-              </CardContent>
-            </Card>
-
+              </div>
+            </div>
           </div>
         </div>
+
       </div>
     );
   }
