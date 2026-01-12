@@ -420,6 +420,36 @@ async def get_smart_plan(current_user: TokenData = Depends(get_current_user)):
     
     return {"plan": plan}
 
+@app.post("/api/insights/chat")
+async def chat_with_ai(
+    request: dict,
+    current_user: TokenData = Depends(get_current_user)
+):
+    """Chat with AI productivity coach with user history context"""
+    db = get_database()
+    user = await db.users.find_one({"email": current_user.email})
+    
+    message = request.get("message", "")
+    if not message:
+        raise HTTPException(status_code=400, detail="Message is required")
+    
+    insights_service = InsightsService(db)
+    response = await insights_service.chat_with_context(str(user["_id"]), message)
+    
+    return {"response": response}
+
+@app.get("/api/insights/daily-recommendations")
+async def get_daily_recommendations(current_user: TokenData = Depends(get_current_user)):
+    """Get 5 daily AI-generated recommendations"""
+    db = get_database()
+    user = await db.users.find_one({"email": current_user.email})
+    
+    insights_service = InsightsService(db)
+    recommendations = await insights_service.generate_daily_recommendations(str(user["_id"]))
+    
+    return {"recommendations": recommendations}
+
+
 @app.get("/api/history/tasks")
 async def get_task_history(current_user: TokenData = Depends(get_current_user)):
     """Get all tasks with their focus session data"""

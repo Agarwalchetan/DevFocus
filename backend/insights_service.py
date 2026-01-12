@@ -177,25 +177,127 @@ class InsightsService:
             return await self._call_gemini(api_key, model, system_message, prompt)
         raise ValueError(f"Unsupported AI provider: {provider}")
     
-    async def generate_ai_description(self, insight_data: Dict, context: str) -> str:
-        """Generate personalized insight description using AI with fallback"""
-
-        if not USE_AI_INSIGHTS:
-            return self._generate_rule_based_description(insight_data, context)
-
-        system_message = "You are a productivity coach helping developers understand their work patterns."
+    def _should_use_ai(self, context: str) -> bool:
+        """Determine if AI should be used for this insight type"""
+        # Only use AI for personalized recommendations, not calculations
+        ai_contexts = {
+            "best_focus_time",
+            "task_completion_efficiency", 
+            "session_fatigue",
+            "tech_productivity",
+            "burnout_detection",
+            "smart_daily_plan"
+        }
+        return context in ai_contexts and USE_AI_INSIGHTS
+    
+    def _create_insight_summary(self, insight_data: Dict, context: str) -> str:
+        """Create a concise text summary instead of sending raw data to AI"""
         
-        prompt = f"""Based on the following developer productivity data, generate a brief, personalized insight (2-3 sentences max). Be encouraging and actionable.
+        if context == "best_focus_time":
+            hour = insight_data.get("hour", 0)
+            minutes = insight_data.get("total_minutes", 0)
+            time_of_day = "morning" if hour < 12 else ("afternoon" if hour < 17 else "evening")
+            return f"User is most productive in the {time_of_day} around {hour}:00 with {minutes} total minutes focused"
+        
+        elif context == "task_completion_efficiency":
+            task_type = insight_data.get("task_type", "tasks")
+            ratio = insight_data.get("efficiency_ratio", 1.0)
+            estimated = insight_data.get("estimated_time", 0)
+            actual = insight_data.get("actual_time", 0)
+            status = "faster than estimated" if ratio < 1 else "slower than estimated" if ratio > 1 else "on track"
+            return f"User completes {task_type} tasks {status} (estimated: {estimated}min, actual: {actual}min, ratio: {ratio:.2f})"
+        
+        elif context == "tech_productivity":
+            tech = insight_data.get("tech", "N/A")
+            rate = insight_data.get("completion_rate", 0)
+            completed = insight_data.get("completed_tasks", 0)
+            total = insight_data.get("total_tasks", 0)
+            return f"User has {rate:.0f}% completion rate with {tech} ({completed}/{total} tasks completed)"
+        
+        elif context == "session_fatigue":
+            sessions = insight_data.get("sessions_per_day", 0)
+            return f"User averages {sessions:.1f} focus sessions per day"
+        
+        elif context == "burnout_detection":
+            signals = insight_data.get("signals", [])
+            severity = insight_data.get("severity", 0)
+            return f"Detected burnout signals: {', '.join(signals)}. Severity level: {severity}/8"
+        
+        elif context == "smart_daily_plan":
+            task_count = len(insight_data.get("suggested_tasks", []))
+            time_window = insight_data.get("best_time_window", "N/A")
+            duration = insight_data.get("estimated_duration", 0)
+            return f"Suggested {task_count} tasks for time window {time_window}, total duration: {duration}min"
+        
+        elif context == "monthly_consistency":
+            days = insight_data.get("active_days", 0)
+            total_min = insight_data.get("total_minutes", 0)
+            return f"User was active {days} days this month with {total_min} total minutes"
+        
+        elif context == "completion_trend":
+            completed = insight_data.get("completed_tasks", 0)
+            total = insight_data.get("total_tasks", 0)
+            rate = insight_data.get("completion_rate", 0)
+            return f"Task completion: {completed}/{total} ({rate:.0f}%)"
+        
+        elif context == "category_focus":
+            category = insight_data.get("dominant_category", "N/A")
+            minutes = insight_data.get("minutes", 0)
+            pct = insight_data.get("percentage", 0)
+            return f"Primary focus: {category} with {minutes}min ({pct:.0f}% of time)"
+        
+        return "User productivity data"
+    
+    async def generate_ai_description(self, insight_data: Dict, context: str) -> str:
+        """Generate personalized insight description using AI with privacy-focused summaries"""
 
-Context: {context}
-Data: {json.dumps(insight_data, indent=2)}
-
-Generate a friendly, encouraging insight that helps the developer understand their productivity pattern and what they can do about it."""
-
-        model_configs = self._get_ai_model_configs()
-        if not model_configs:
+        # Check if AI should be used for this context
+        if not self._should_use_ai(context):
             return self._generate_rule_based_description(insight_data, context)
-        for idx, config in enumerate(model_configs, start=1):
+
+        # Create privacy-focused summary instead of sending raw data
+        summary = self._create_insight_summary(insight_data, context)
+        
+        system_message = "You are a productivity coach. Give brief, encouraging advice (2-3 sentences max). Be specific and actionable."
+        
+        prompt = f"""Based on this productivity insight, give personalized advice:
+
+{summary}
+
+Provide encouraging, actionable advice that helps the user improve their productivity."""
+
+        # Try Groq first (primary provider), then fallback to other providers
+        model_configs = self._get_ai_model_configs()
+        
+        # Ensure Groq is first if available
+        groq_config = None
+        other_configs = []
+        for config in model_configs:
+            if config.get("provider", "").lower() == "groq":
+                groq_config = config
+            else:
+                other_configs.append(config)
+        
+        # Prioritize Groq
+        ordered_configs = []
+        if groq_config:
+            ordered_configs.append(groq_config)
+        ordered_configs.extend(other_configs)
+        
+        # If no configs, try default Groq
+        if not ordered_configs:
+            groq_key = os.environ.get("GROQ_API_KEY")
+            if groq_key:
+                ordered_configs.append({
+                    "provider": "groq",
+                    "model": "llama-3.1-70b-versatile",
+                    "isUsed": True
+                })
+        
+        if not ordered_configs:
+            return self._generate_rule_based_description(insight_data, context)
+        
+        for idx, config in enumerate(ordered_configs, start=1):
             is_used = config.get("isUsed")
             if is_used is None:
                 is_used = config.get("is_used", True)
@@ -742,3 +844,245 @@ Generate a friendly, encouraging insight that helps the developer understand the
         
         # Cache expired or force refresh
         return await self.cache_insights(user_id)
+    
+    async def _get_user_history_summary(self, user_id: str) -> str:
+        """Create privacy-focused summary of user's history for AI context"""
+        
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=7)
+        
+        # Get aggregated data (no sensitive details)
+        tasks = await self.db.tasks.find({"userId": user_id}).to_list(100)
+        sessions = await self.db.focus_sessions.find({
+            "userId": user_id,
+            "startTime": {"$gte": start_date.isoformat()}
+        }).to_list(500)
+        
+        # Calculate summary stats
+        total_tasks = len(tasks)
+        completed_tasks = len([t for t in tasks if t.get("status") == "completed"])
+        completion_rate = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
+        
+        total_focus_minutes = sum(s.get("duration", 0) for s in sessions)
+        avg_session_duration = (total_focus_minutes / len(sessions)) if sessions else 0
+        
+        # Find most productive time
+        hour_dist = {}
+        for session in sessions:
+            if session.get("startTime"):
+                hour = datetime.fromisoformat(session["startTime"]).hour
+                hour_dist[hour] = hour_dist.get(hour, 0) + 1
+        
+        best_hour = max(hour_dist.items(), key=lambda x: x[1])[0] if hour_dist else 10
+        
+        # Task type distribution
+        task_types = {}
+        for task in tasks:
+            task_type = task.get("type", "Coding")
+            task_types[task_type] = task_types.get(task_type, 0) + 1
+        
+        dominant_type = max(task_types.items(), key=lambda x: x[1])[0] if task_types else "Coding"
+        
+        # Create summary
+        summary = f"""User Productivity Summary (Last 7 Days):
+- Total tasks: {total_tasks}, Completed: {completed_tasks} ({completion_rate:.0f}% completion rate)
+- Total focus time: {total_focus_minutes} minutes across {len(sessions)} sessions
+- Average session duration: {avg_session_duration:.0f} minutes
+- Most productive hour: {best_hour}:00
+- Dominant task type: {dominant_type}
+- Active days this week: {len(set(datetime.fromisoformat(s['startTime']).date() for s in sessions if s.get('startTime')))}"""
+        
+        return summary
+    
+    async def chat_with_context(self, user_id: str, message: str) -> str:
+        """Chat with AI using user's history as context"""
+        
+        if not USE_AI_INSIGHTS:
+            return "AI insights are currently disabled. Enable them in your environment configuration to chat with the AI coach."
+        
+        # Get user history summary (privacy-focused)
+        history_summary = await self._get_user_history_summary(user_id)
+        
+        system_message = """You are a friendly, supportive productivity coach helping a developer improve their work habits. 
+Be conversational, encouraging, and practical. Keep responses concise (3-4 sentences max). 
+Use the user's productivity data to give personalized advice."""
+        
+        prompt = f"""{history_summary}
+
+User Question: {message}
+
+Provide a helpful, encouraging response based on their productivity patterns."""
+        
+        # Use the general AI description method which handles model selection
+        model_configs = self._get_ai_model_configs()
+        
+        # Prioritize Groq
+        groq_config = None
+        other_configs = []
+        for config in model_configs:
+            if config.get("provider", "").lower() == "groq":
+                groq_config = config
+            else:
+                other_configs.append(config)
+        
+        ordered_configs = []
+        if groq_config:
+            ordered_configs.append(groq_config)
+        ordered_configs.extend(other_configs)
+        
+        # Try each configured model
+        for idx, config in enumerate(ordered_configs, start=1):
+            is_used = config.get("isUsed")
+            if is_used is None:
+                is_used = config.get("is_used", True)
+            if str(is_used).lower() != "true":
+                continue
+
+            provider = config.get("provider") or ""
+            model = config.get("model") or ""
+            api_key = self._resolve_api_key(provider, config)
+            if not provider or not model or not api_key:
+                continue
+
+            try:
+                response = await self._call_llm_provider(provider, api_key, model, system_message, prompt)
+                if response and len(response.strip()) > 20:
+                    return response.strip()
+            except Exception as e:
+                print(f"Chat AI provider attempt {idx} failed ({provider}/{model}): {e}")
+        
+        return "I'm having trouble connecting to the AI service. Please try again later."
+    
+    async def generate_daily_recommendations(self, user_id: str) -> List[Dict]:
+        """Generate 5 daily recommendations: todos, tips, and motivation"""
+        
+        # Check cache first (24 hour TTL)
+        today = datetime.utcnow().date().isoformat()
+        cached = await self.db.daily_recommendations.find_one({
+            "userId": user_id,
+            "date": today
+        })
+        
+        if cached:
+            return cached.get("recommendations", [])
+        
+        # Generate new recommendations
+        if not USE_AI_INSIGHTS:
+            # Fallback rule-based recommendations
+            return self._get_fallback_recommendations()
+        
+        history_summary = await self._get_user_history_summary(user_id)
+        
+        system_message = """You are a productivity coach. Generate exactly 5 UNIQUE, DIFFERENT recommendations for today.
+Each recommendation must be distinct and actionable.
+Include: 2 specific todos, 2 practical tips, and 1 motivational insight.
+Each point should be one sentence, specific, and encouraging.
+IMPORTANT: All 5 recommendations must be different from each other."""
+        
+        prompt = f"""{history_summary}
+
+Generate 5 DIFFERENT, UNIQUE recommendations for today:
+1-2. Two specific todos based on their patterns (make them different from each other)
+3-4. Two practical productivity tips (make them different from each other and from the todos)
+5. One motivational insight (make it different from all the others)
+
+Format each as a single clear sentence. Ensure all 5 are unique and different."""
+        
+        # Use configured AI models
+        model_configs = self._get_ai_model_configs()
+        if not model_configs:
+            return self._get_fallback_recommendations()
+        
+        # Try each configured model
+        for idx, config in enumerate(model_configs, start=1):
+            is_used = config.get("isUsed")
+            if is_used is None:
+                is_used = config.get("is_used", True)
+            if str(is_used).lower() != "true":
+                continue
+
+            provider = config.get("provider") or ""
+            model = config.get("model") or ""
+            api_key = self._resolve_api_key(provider, config)
+            if not provider or not model or not api_key:
+                continue
+        
+            try:
+                response = await self._call_llm_provider(provider, api_key, model, system_message, prompt)
+                
+                # Parse response into structured recommendations
+                recommendations = []
+                lines = [line.strip() for line in response.split('\n') if line.strip()]
+                
+                # Deduplicate recommendations
+                seen_texts = set()
+                for idx_rec, line in enumerate(lines, 1):
+                    # Remove numbering if present
+                    clean_line = line.lstrip('0123456789.-) ')
+                    
+                    # Skip if duplicate
+                    if clean_line.lower() in seen_texts:
+                        continue
+                    
+                    seen_texts.add(clean_line.lower())
+                    
+                    # Assign type based on position
+                    if len(recommendations) < 2:
+                        rec_type = "todo"
+                        icon = "target"
+                    elif len(recommendations) < 4:
+                        rec_type = "tip"
+                        icon = "lightbulb"
+                    else:
+                        rec_type = "motivation"
+                        icon = "zap"
+                    
+                    recommendations.append({
+                        "type": rec_type,
+                        "text": clean_line,
+                        "icon": icon
+                    })
+                    
+                    # Stop once we have 5 unique recommendations
+                    if len(recommendations) >= 5:
+                        break
+                
+                # Ensure we have exactly 5
+                while len(recommendations) < 5:
+                    recommendations.append({
+                        "type": "tip",
+                        "text": "Stay focused and take regular breaks!",
+                        "icon": "lightbulb"
+                    })
+                
+                # Cache for 24 hours
+                await self.db.daily_recommendations.update_one(
+                    {"userId": user_id, "date": today},
+                    {"$set": {
+                        "userId": user_id,
+                        "date": today,
+                        "recommendations": recommendations,
+                        "generated_at": datetime.utcnow().isoformat()
+                    }},
+                    upsert=True
+                )
+                
+                return recommendations[:5]
+                
+            except Exception as e:
+                print(f"Daily recommendations AI provider attempt {idx} failed ({provider}/{model}): {e}")
+                continue
+        
+        # All providers failed, return fallback
+        return self._get_fallback_recommendations()
+    
+    def _get_fallback_recommendations(self) -> List[Dict]:
+        """Fallback recommendations when AI is unavailable"""
+        return [
+            {"type": "todo", "text": "Start your day with your most challenging task during peak focus hours", "icon": "target"},
+            {"type": "todo", "text": "Complete at least one focus session of 25 minutes today", "icon": "target"},
+            {"type": "tip", "text": "Take a 5-minute break between focus sessions to recharge", "icon": "lightbulb"},
+            {"type": "tip", "text": "Track your time to identify productivity patterns and improve planning", "icon": "lightbulb"},
+            {"type": "motivation", "text": "Every focus session is a step forward. Keep building momentum!", "icon": "zap"}
+        ]
+

@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { Input } from '../components/ui/input';
 import {
   Lightbulb,
   Clock,
@@ -16,7 +17,9 @@ import {
   CheckCircle,
   PieChart,
   Zap,
-  Plus
+  Plus,
+  Send,
+  MessageCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -27,7 +30,9 @@ const iconMap = {
   code: Code,
   'trending-up': TrendingUp,
   'check-circle': CheckCircle,
-  'pie-chart': PieChart
+  'pie-chart': PieChart,
+  lightbulb: Lightbulb,
+  zap: Zap
 };
 
 export const Insights = ({ onNavigate, onStartFocus }) => {
@@ -40,10 +45,21 @@ export const Insights = ({ onNavigate, onStartFocus }) => {
   const [smartPlan, setSmartPlan] = useState(null);
   const [generatedAt, setGeneratedAt] = useState(null);
 
+  // Chat state
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef(null);
+
+  // Daily recommendations state
+  const [dailyRecommendations, setDailyRecommendations] = useState([]);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(true);
+
   const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
   useEffect(() => {
     fetchInsights();
+    fetchDailyRecommendations();
   }, []);
 
   const fetchInsights = async () => {
@@ -116,6 +132,63 @@ export const Insights = ({ onNavigate, onStartFocus }) => {
     }
   };
 
+  const fetchDailyRecommendations = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/insights/daily-recommendations`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setDailyRecommendations(data.recommendations || []);
+      }
+    } catch (error) {
+      console.error('Failed to load daily recommendations:', error);
+    } finally {
+      setRecommendationsLoading(false);
+    }
+  };
+
+  const sendChatMessage = async () => {
+    if (!chatInput.trim()) return;
+
+    const userMessage = chatInput.trim();
+    setChatMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setChatInput('');
+    setChatLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/api/insights/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ message: userMessage }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setChatMessages(prev => [...prev, { role: 'ai', content: data.response }]);
+        setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+      } else {
+        toast.error('Failed to get AI response');
+      }
+    } catch (error) {
+      toast.error('Error communicating with AI');
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const handleChatKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendChatMessage();
+    }
+  };
+
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -154,28 +227,136 @@ export const Insights = ({ onNavigate, onStartFocus }) => {
         </p>
       )}
 
+      {/* AI Chatbox */}
+      <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-accent/5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageCircle className="w-5 h-5 text-primary" />
+            AI Productivity Coach
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">Chat about your productivity patterns and get personalized advice</p>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {/* Chat Messages */}
+            <div className="max-h-64 overflow-y-auto space-y-3 p-3 bg-card/50 rounded-lg border border-border">
+              {chatMessages.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Start a conversation! Ask me about your productivity, focus habits, or tips for improvement.
+                </p>
+              ) : (
+                chatMessages.map((msg, idx) => (
+                  <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div
+                      className={`max-w-[80%] rounded-lg px-4 py-2 ${msg.role === 'user'
+                        ? 'bg-primary text-primary-foreground ml-auto'
+                        : 'bg-secondary text-foreground'
+                        }`}
+                    >
+                      <p className="text-sm">{msg.content}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+              {chatLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-secondary text-foreground rounded-lg px-4 py-2">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                      <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Chat Input */}
+            <div className="flex gap-2">
+              <Input
+                placeholder="Ask me anything about your productivity..."
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyPress={handleChatKeyPress}
+                disabled={chatLoading}
+                className="flex-1 bg-card border-border"
+              />
+              <Button
+                onClick={sendChatMessage}
+                disabled={!chatInput.trim() || chatLoading}
+                className="bg-primary hover:bg-primary-hover"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Daily Recommendations */}
+      <Card className="border-accent/30 bg-gradient-to-br from-accent/5 to-primary/5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Zap className="w-5 h-5 text-accent" />
+            Today's Recommendations
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">AI-generated daily tips, todos, and motivation</p>
+        </CardHeader>
+        <CardContent>
+          {recommendationsLoading ? (
+            <div className="flex justify-center py-4">
+              <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {dailyRecommendations.map((rec, idx) => {
+                const IconComponent = iconMap[rec.icon] || Target;
+                return (
+                  <div
+                    key={idx}
+                    className="flex items-start gap-3 p-3 rounded-lg bg-card/50 border border-border hover:border-accent/50 transition-colors"
+                  >
+                    <div className={`p-2 rounded-full ${rec.type === 'todo' ? 'bg-primary/10 text-primary' :
+                      rec.type === 'tip' ? 'bg-accent/10 text-accent' :
+                        'bg-primary/10 text-primary'
+                      }`}>
+                      <IconComponent className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-foreground">{rec.text}</p>
+                      <Badge variant="secondary" className="text-xs mt-1">
+                        {rec.type}
+                      </Badge>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Burnout Alert */}
       {burnoutData && burnoutData.detected && (
         <Card
-          className={`border-2 ${
-            burnoutData.level === 'high'
-              ? 'border-destructive bg-destructive/5'
-              : burnoutData.level === 'medium'
+          className={`border-2 ${burnoutData.level === 'high'
+            ? 'border-destructive bg-destructive/5'
+            : burnoutData.level === 'medium'
               ? 'border-amber-500 bg-amber-500/5'
               : 'border-accent bg-accent/5'
-          }`}
+            }`}
           data-testid="burnout-alert"
         >
           <CardContent className="p-6">
             <div className="flex items-start gap-4">
               <AlertTriangle
-                className={`w-8 h-8 ${
-                  burnoutData.level === 'high'
-                    ? 'text-destructive'
-                    : burnoutData.level === 'medium'
+                className={`w-8 h-8 ${burnoutData.level === 'high'
+                  ? 'text-destructive'
+                  : burnoutData.level === 'medium'
                     ? 'text-amber-500'
                     : 'text-accent'
-                }`}
+                  }`}
               />
               <div className="flex-1">
                 <h3 className="text-xl font-semibold mb-2 flex items-center gap-2">
@@ -186,8 +367,8 @@ export const Insights = ({ onNavigate, onStartFocus }) => {
                       burnoutData.level === 'high'
                         ? 'bg-destructive-subtle text-destructive border-destructive/30'
                         : burnoutData.level === 'medium'
-                        ? 'bg-amber-100 text-amber-700 border-amber-300'
-                        : 'bg-accent-subtle text-accent border-accent/30'
+                          ? 'bg-amber-100 text-amber-700 border-amber-300'
+                          : 'bg-accent-subtle text-accent border-accent/30'
                     }
                   >
                     {burnoutData.level.toUpperCase()} RISK
