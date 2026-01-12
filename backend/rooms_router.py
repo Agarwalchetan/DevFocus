@@ -138,6 +138,14 @@ async def join_room_request(room_id: str, request: JoinRoomRequest, current_user
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
         
+    # CHECK BLOCKLIST
+    if str(user["_id"]) in room.get("blockedUsers", []):
+        raise HTTPException(status_code=403, detail="You are blocked from joining this room")
+
+    # CHECK CAPACITY
+    if len(room.get("members", [])) >= 5:
+        raise HTTPException(status_code=409, detail="Room is full (Max 5 members)") 
+
     # Check already member
     if any(m["userId"] == str(user["_id"]) for m in room.get("members", [])):
         return {"message": "Already a member", "status": "member"}
@@ -465,3 +473,58 @@ async def log_room_session(room_id: str, log_data: RoomSessionLog, current_user:
         count += 1
             
     return {"message": f"Logged {duration} minutes for {count} users"}
+
+@router.post("/api/rooms/{room_id}/kick")
+async def kick_member(room_id: str, member_id: str, current_user: TokenData = Depends(get_current_user)):
+    db = get_database()
+    room = await db.focus_rooms.find_one({"_id": ObjectId(room_id)})
+    if not room or room["ownerId"] != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    await db.focus_rooms.update_one(
+        {"_id": ObjectId(room_id)},
+        {"$pull": {"members": {"userId": member_id}}}
+    )
+    
+    await manager.broadcast({
+        "type": "room_update",
+        "trigger": "kick",
+        "kickedUserId": member_id
+    }, room_id)
+    return {"message": "Member kicked"}
+
+@router.post("/api/rooms/{room_id}/block")
+async def block_member(room_id: str, member_id: str, current_user: TokenData = Depends(get_current_user)):
+    db = get_database()
+    room = await db.focus_rooms.find_one({"_id": ObjectId(room_id)})
+    if not room or room["ownerId"] != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Kick member AND Add to blockedUsers
+    await db.focus_rooms.update_one(
+        {"_id": ObjectId(room_id)},
+        {
+            "$pull": {"members": {"userId": member_id}, "pendingRequests": {"userId": member_id}},
+            "$addToSet": {"blockedUsers": member_id}
+        }
+    )
+
+    await manager.broadcast({
+        "type": "room_update",
+        "trigger": "block",
+        "blockedUserId": member_id
+    }, room_id)
+    return {"message": "Member blocked"}
+
+@router.post("/api/rooms/{room_id}/unblock")
+async def unblock_member(room_id: str, member_id: str, current_user: TokenData = Depends(get_current_user)):
+    db = get_database()
+    room = await db.focus_rooms.find_one({"_id": ObjectId(room_id)})
+    if not room or room["ownerId"] != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    await db.focus_rooms.update_one(
+        {"_id": ObjectId(room_id)},
+        {"$pull": {"blockedUsers": member_id}}
+    )
+    return {"message": "Member unblocked"}

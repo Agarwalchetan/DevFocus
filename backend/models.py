@@ -174,6 +174,7 @@ class FocusRoomResponse(BaseModel):
     isPrivate: bool = True 
     activeUsers: List[Dict] = [] 
     members: List[RoomMember] = [] 
+    blockedUsers: List[str] = [] # List of User IDs
     pendingRequests: List[RoomMember] = [] 
     tasks: List[RoomTask] = []
     chatHistory: List[ChatMessage] = []
