@@ -13,8 +13,8 @@ export const Navbar = ({ currentPage, onNavigate }) => {
     { id: 'focus', label: 'Focus', icon: Clock },
     { id: 'insights', label: 'Insights', icon: Lightbulb },
     { id: 'history', label: 'History', icon: History },
-    { id: 'heatmap', label: 'Heatmap', icon: Activity },
     { id: 'rooms', label: 'Rooms', icon: Users },
+    { id: 'heatmap', label: 'Heatmap', icon: Activity },
   ];
 
   return (
