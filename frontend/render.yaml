@@ -1,0 +1,25 @@
+# Frontend-specific render.yaml
+# Deploy this from the frontend directory as root
+
+services:
+  - type: web
+    name: devfocus-frontend
+    env: static
+    region: oregon
+    plan: free
+    # Build from frontend directory
+    buildCommand: npm install --legacy-peer-deps && npm run build
+    # Publish the build directory
+    staticPublishPath: ./build
+    # Handle client-side routing
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: REACT_APP_BACKEND_URL
+        value: https://devfocus-backend-xfkc.onrender.com
