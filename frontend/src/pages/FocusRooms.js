@@ -335,7 +335,7 @@ export const FocusRooms = () => {
       // Handle Z for UTC safety
       const startTimeStr = currentRoom.timerStartTime.endsWith('Z')
         ? currentRoom.timerStartTime
-        : text = currentRoom.timerStartTime + 'Z';
+        : currentRoom.timerStartTime + 'Z';
 
       const startTime = new Date(startTimeStr).getTime();
       const durationMs = (currentRoom.timerDuration || 25) * 60 * 1000;
@@ -485,14 +485,6 @@ export const FocusRooms = () => {
     setChatMessage('');
   };
 
-
-  // --- VIEWS ---
-
-  if (currentRoom) {
-    // ... existing view code ...
-  }
-
-  // ... (Update Task UI below) ...
 
   // --- VIEWS ---
 
