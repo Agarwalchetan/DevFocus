@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Toaster } from './components/ui/sonner';
-import { Auth } from './pages/Auth';
+import { LandingPage } from './pages/LandingPage';
 import { Dashboard } from './pages/Dashboard';
 import { Tasks } from './pages/Tasks';
 import { FocusTimer } from './pages/FocusTimer';
@@ -11,6 +11,9 @@ import { Insights } from './pages/Insights';
 import { History } from './pages/History';
 import { ProfilePage } from './pages/ProfilePage';
 import { CommunityPage } from './pages/CommunityPage';
+import { PrivacyPage } from './pages/PrivacyPage';
+import { TermsPage } from './pages/TermsPage';
+import { ContactPage } from './pages/ContactPage';
 import { Navbar } from './components/Navbar';
 
 function AppContent() {
@@ -32,6 +35,20 @@ function AppContent() {
     // 2. Community Route
     if (path === '/community') {
       setCurrentPage('community');
+      return;
+    }
+
+    // 3. Privacy, Terms, Contact Routes
+    if (path === '/privacy') {
+      setCurrentPage('privacy');
+      return;
+    }
+    if (path === '/terms') {
+      setCurrentPage('terms');
+      return;
+    }
+    if (path === '/contact') {
+      setCurrentPage('contact');
       return;
     }
 
@@ -72,8 +89,18 @@ function AppContent() {
   }
 
   if (!user) {
-    return <Auth />;
+    // Show legal pages even when not logged in
+    if (currentPage === 'privacy') return <PrivacyPage />;
+    if (currentPage === 'terms') return <TermsPage />;
+    if (currentPage === 'contact') return <ContactPage />;
+
+    return <LandingPage />;
   }
+
+  // Also allow legal pages when logged in
+  if (currentPage === 'privacy') return <PrivacyPage />;
+  if (currentPage === 'terms') return <TermsPage />;
+  if (currentPage === 'contact') return <ContactPage />;
 
   return (
     <div className="min-h-screen bg-background">
