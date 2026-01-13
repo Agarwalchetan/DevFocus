@@ -31,9 +31,7 @@ export const ProfilePage = ({ username, onNavigate }) => {
 
     const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
-    useEffect(() => {
-        if (username) fetchProfile(username);
-    }, [username]);
+
 
     useEffect(() => {
         const handleClickOutside = (event) => {

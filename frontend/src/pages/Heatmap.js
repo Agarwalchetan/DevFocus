@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -15,11 +15,7 @@ export const Heatmap = () => {
 
   const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
-  useEffect(() => {
-    fetchHeatmapData();
-  }, []);
-
-  const fetchHeatmapData = async () => {
+  const fetchHeatmapData = useCallback(async () => {
     try {
       const response = await fetch(`${API_URL}/api/heatmap`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -31,7 +27,11 @@ export const Heatmap = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [API_URL, token]);
+
+  useEffect(() => {
+    fetchHeatmapData();
+  }, [fetchHeatmapData]);
 
   const getLast365Days = () => {
     const days = [];

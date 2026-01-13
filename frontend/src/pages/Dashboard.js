@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -16,14 +16,9 @@ export const Dashboard = ({ onNavigate, onStartFocus }) => {
 
   const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
-  useEffect(() => {
-    fetchDashboardData();
-    checkBurnout();
-  }, []);
-
-  const checkBurnout = async () => {
+  const checkBurnout = useCallback(async () => {
     if (burnoutChecked) return;
-    
+
     try {
       const response = await fetch(`${API_URL}/api/insights/burnout`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -34,7 +29,7 @@ export const Dashboard = ({ onNavigate, onStartFocus }) => {
         if (data.burnout && data.burnout.detected) {
           const severity = data.burnout.level;
           const message = data.burnout.description;
-          
+
           if (severity === 'high') {
             toast.error(message, { duration: 10000 });
           } else if (severity === 'medium') {
@@ -48,9 +43,9 @@ export const Dashboard = ({ onNavigate, onStartFocus }) => {
     } catch (error) {
       console.error('Failed to check burnout:', error);
     }
-  };
+  }, [API_URL, token, burnoutChecked]);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       const [tasksRes, heatmapRes] = await Promise.all([
         fetch(`${API_URL}/api/tasks`, {
@@ -91,7 +86,12 @@ export const Dashboard = ({ onNavigate, onStartFocus }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [API_URL, token]);
+
+  useEffect(() => {
+    fetchDashboardData();
+    checkBurnout();
+  }, [fetchDashboardData, checkBurnout]);
 
   if (loading) {
     return (

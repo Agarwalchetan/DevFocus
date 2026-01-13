@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTimer, useNotification } from '../hooks/useCustomHooks';
 import { Button } from '../components/ui/button';
@@ -56,24 +56,9 @@ export const FocusTimer = ({ initialTask, onComplete }) => {
 
   const timer = useTimer(duration, handleComplete);
 
-  useEffect(() => {
-    fetchTasks();
-    restoreSessionState();
-  }, []);
 
-  useEffect(() => {
-    if (initialTask) {
-      setSelectedTask(initialTask);
-    }
-  }, [initialTask]);
 
-  useEffect(() => {
-    if (sessionId || selectedTask || duration !== 25) {
-      saveSessionState();
-    }
-  }, [sessionId, selectedTask, duration]);
-
-  const restoreSessionState = () => {
+  const restoreSessionState = useCallback(() => {
     try {
       const saved = localStorage.getItem(SESSION_STORAGE_KEY);
       if (saved) {
@@ -85,28 +70,47 @@ export const FocusTimer = ({ initialTask, onComplete }) => {
     } catch (error) {
       console.error('Failed to restore session state:', error);
     }
-  };
+  }, []);
 
-  const saveSessionState = () => {
+  const saveSessionState = useCallback(() => {
     const state = {
       sessionId,
       selectedTask,
       duration
     };
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(state));
-  };
+  }, [sessionId, selectedTask, duration]);
 
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     try {
       const response = await fetch(`${API_URL}/api/tasks`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await response.json();
-      setTasks(data.filter((t) => t.status !== 'completed'));
+      if (response.ok) {
+        const data = await response.json();
+        setTasks(data);
+      }
     } catch (error) {
-      console.error('Failed to load tasks');
+      console.error('Failed to fetch tasks:', error);
     }
-  };
+  }, [API_URL, token]);
+
+  useEffect(() => {
+    fetchTasks();
+    restoreSessionState();
+  }, [fetchTasks, restoreSessionState]);
+
+  useEffect(() => {
+    if (initialTask) {
+      setSelectedTask(initialTask);
+    }
+  }, [initialTask, setSelectedTask]);
+
+  useEffect(() => {
+    if (sessionId || selectedTask || duration !== 25) {
+      saveSessionState();
+    }
+  }, [sessionId, selectedTask, duration, saveSessionState]);
 
   const startSession = async () => {
     if (!selectedTask) {

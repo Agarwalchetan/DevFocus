@@ -135,20 +135,21 @@ export const FocusRooms = () => {
   // Fetch User & Rooms on Mount
   // Fetch User & Rooms on Mount
   // Fetch User & Rooms on Mount (Run ONCE)
+  // Fetch User & Rooms on Mount
   useEffect(() => {
     fetchUser();
     fetchRooms();
     fetchPersonalTasks();
-  }, []); // Dependencies removed to prevent loop (fetchUser -> user changes -> getMyStatus changes -> fetchRoomDetails changes -> Effect runs -> fetchUser)
+  }, [fetchUser, fetchRooms, fetchPersonalTasks]);
 
-  // Auto-Join from URL (Run ONCE)
+  // Auto-Join from URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const rid = params.get('room');
     if (rid) fetchRoomDetails(rid);
-  }, []); // Dependencies removed to avoid re-triggering on function reference changes
+  }, [fetchRoomDetails]);
 
-  // Sync Status when User loads (Fixes race condition without loop)
+  // Sync Status when User loads
   useEffect(() => {
     if (currentRoom && (user.id || user._id)) {
       const newStatus = getMyStatus(currentRoom);
@@ -157,7 +158,7 @@ export const FocusRooms = () => {
         setCurrentRoom(prev => ({ ...prev, status: newStatus }));
       }
     }
-  }, [user, currentRoom?.roomId, getMyStatus]); // Only re-run if User or Room ID changes (deep check handled inside)
+  }, [user, currentRoom, getMyStatus]); // Added currentRoom as dependency
 
   // Scroll Chat
   useEffect(() => {

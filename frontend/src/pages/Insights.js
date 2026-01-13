@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -57,12 +57,9 @@ export const Insights = ({ onNavigate, onStartFocus }) => {
 
   const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
-  useEffect(() => {
-    fetchInsights();
-    fetchDailyRecommendations();
-  }, []);
 
-  const fetchInsights = async () => {
+
+  const fetchInsights = useCallback(async () => {
     try {
       const response = await fetch(`${API_URL}/api/insights`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -81,7 +78,7 @@ export const Insights = ({ onNavigate, onStartFocus }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [API_URL, token]);
 
   const refreshInsights = async () => {
     setRefreshing(true);
@@ -132,7 +129,7 @@ export const Insights = ({ onNavigate, onStartFocus }) => {
     }
   };
 
-  const fetchDailyRecommendations = async () => {
+  const fetchDailyRecommendations = useCallback(async () => {
     try {
       const response = await fetch(`${API_URL}/api/insights/daily-recommendations`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -147,7 +144,12 @@ export const Insights = ({ onNavigate, onStartFocus }) => {
     } finally {
       setRecommendationsLoading(false);
     }
-  };
+  }, [API_URL, token]);
+
+  useEffect(() => {
+    fetchInsights();
+    fetchDailyRecommendations();
+  }, [fetchInsights, fetchDailyRecommendations]);
 
   const sendChatMessage = async () => {
     if (!chatInput.trim()) return;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -28,11 +28,7 @@ export const History = () => {
 
     const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
-    useEffect(() => {
-        fetchHistoryData();
-    }, []);
-
-    const fetchHistoryData = async () => {
+    const fetchHistoryData = useCallback(async () => {
         try {
             const headers = { Authorization: `Bearer ${token}` };
 
@@ -55,7 +51,11 @@ export const History = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [API_URL, token]);
+
+    useEffect(() => {
+        fetchHistoryData();
+    }, [fetchHistoryData]);
 
     const filteredTasks = tasks.filter((task) => {
         const matchesFilter =
