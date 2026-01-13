@@ -1,0 +1,40 @@
+# render.yaml - Render Blueprint Configuration
+# This file defines how your services are deployed on Render.com
+
+services:
+  # Backend API Service (FastAPI)
+  - type: web
+    name: devfocus-backend
+    env: python
+    region: oregon
+    plan: free  # Change to 'starter' for production ($7/month)
+    buildCommand: "cd backend && pip install --upgrade pip && pip install -r requirements.txt"
+    startCommand: "cd backend && uvicorn server:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: MONGODB_URI
+        sync: false  # You'll set this manually in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true  # Render will auto-generate
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: false
+      - key: CORS_ORIGINS
+        sync: false  # You'll set this after frontend deployment
+
+  # Frontend Static Site (React)
+  - type: web
+    name: devfocus-frontend
+    env: static
+    region: oregon
+    buildCommand: "cd frontend && npm install && npm run build"
+    staticPublishPath: frontend/build
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: REACT_APP_BACKEND_URL
+        sync: false  # You'll set this after backend deployment
