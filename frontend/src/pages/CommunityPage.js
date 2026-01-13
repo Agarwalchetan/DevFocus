@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { User, Search, Users } from 'lucide-react';
@@ -11,22 +11,7 @@ export const CommunityPage = () => {
 
     const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
-    useEffect(() => {
-        fetchUsers();
-    }, []);
-
-    // Filter users client-side for instant feedback on this page, 
-    // or verify if we should hit API. Since we fetched "all" (limit 50), client side filter of that 50 is fine, 
-    // but if we want real search we should hit API. 
-    // Let's implement active search on this page too.
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            fetchUsers(searchQuery);
-        }, 300);
-        return () => clearTimeout(timer);
-    }, [searchQuery]);
-
-    const fetchUsers = async (query = '') => {
+    const fetchUsers = useCallback(async (query = '') => {
         setLoading(true);
         try {
             // If query is empty, backend returns recent 50 users.
@@ -42,7 +27,22 @@ export const CommunityPage = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [API_URL]);
+
+    useEffect(() => {
+        fetchUsers();
+    }, [fetchUsers]);
+
+    // Filter users client-side for instant feedback on this page, 
+    // or verify if we should hit API. Since we fetched "all" (limit 50), client side filter of that 50 is fine, 
+    // but if we want real search we should hit API. 
+    // Let's implement active search on this page too.
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            fetchUsers(searchQuery);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery, fetchUsers]);
 
     return (
         <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">

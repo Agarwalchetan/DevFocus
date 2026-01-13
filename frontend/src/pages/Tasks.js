@@ -41,10 +41,12 @@ export const Tasks = ({ onStartFocus }) => {
   useEffect(() => {
     fetchTasks();
     fetchTaskTypes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     applyFilter();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks, filter, activeSection]);
 
   const fetchTasks = async () => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -58,13 +58,13 @@ export const ProfilePage = ({ username, onNavigate }) => {
             }
         }, 150);
         return () => clearTimeout(timer);
-    }, [searchQuery]);
+    }, [searchQuery, API_URL]);
 
     const handleShowAllUsers = () => {
         window.location.href = '/community';
     };
 
-    const fetchProfile = async (uname) => {
+    const fetchProfile = useCallback(async (uname) => {
         setLoading(true);
         try {
             const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
@@ -78,7 +78,11 @@ export const ProfilePage = ({ username, onNavigate }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [API_URL, token]);
+
+    useEffect(() => {
+        if (username) fetchProfile(username);
+    }, [username, fetchProfile]);
 
     const handleFollow = async () => {
         if (!currentUser) return toast.error("Please login to follow");
