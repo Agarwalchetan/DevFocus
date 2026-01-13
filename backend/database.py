@@ -1,7 +1,6 @@
 import os
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import DuplicateKeyError
-import certifi
 
 # Support both MONGODB_URI (Render) and MONGO_URL (local)
 MONGO_URL = os.environ.get('MONGODB_URI') or os.environ.get('MONGO_URL')
@@ -18,32 +17,39 @@ async def connect_to_mongo():
     
     print(f"Connecting to MongoDB...")
     
-    # MongoDB connection options for better stability
+    # Simplified connection - let motor handle SSL automatically
+    # mongodb+srv:// automatically handles TLS/SSL
     client = AsyncIOMotorClient(
         MONGO_URL,
-        serverSelectionTimeoutMS=10000,  # 10 seconds
-        connectTimeoutMS=10000,
-        socketTimeoutMS=10000,
+        serverSelectionTimeoutMS=30000,  # 30 seconds - give more time
+        connectTimeoutMS=30000,
+        socketTimeoutMS=30000,
+        # Let pymongo auto-detect SSL from URI (mongodb+srv handles this)
+        tls=True,  # Explicitly enable TLS for mongodb+srv
         retryWrites=True,
-        tlsCAFile=certifi.where(),  # Use certifi for SSL certificates
-        # These options help with Render deployment
         maxPoolSize=10,
         minPoolSize=1
     )
     
     database = client[DB_NAME]
     
-    # Test connection
+    # Test connection with better error reporting
     try:
-        await client.admin.command('ping')
+        # Simple ping to test connection
+        result = await client.admin.command('ping')
         print(f"✅ Successfully connected to MongoDB: {DB_NAME}")
+        print(f"   MongoDB server version: {result}")
     except Exception as e:
-        print(f"❌ Failed to connect to MongoDB: {str(e)}")
+        print(f"❌ Failed to connect to MongoDB")
+        print(f"   Error type: {type(e).__name__}")
+        print(f"   Error message: {str(e)}")
+        print(f"   Connection string format: {MONGO_URL[:30]}...")  # Show first 30 chars only
         raise
     
     # Create indexes (with error handling)
     try:
         await database.users.create_index("email", unique=True)
+        print("✅ Created index: users.email")
         await database.tasks.create_index([("userId", 1), ("createdAt", -1)])
         await database.focus_sessions.create_index([("userId", 1), ("startTime", -1)])
         await database.heatmap_entries.create_index([("userId", 1), ("date", -1)], unique=True)
