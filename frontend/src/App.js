@@ -45,11 +45,22 @@ function AppContent() {
   const handleStartFocus = (task) => {
     setFocusTask(task);
     setCurrentPage('focus');
+    window.history.pushState({}, '', '/');
   };
 
   const handleFocusComplete = () => {
     setFocusTask(null);
     setCurrentPage('dashboard');
+    window.history.pushState({}, '', '/');
+  };
+
+  // Wrapper to update both state and URL
+  const handleNavigate = (page) => {
+    setCurrentPage(page);
+    // Update URL to root for all non-special pages
+    if (page !== 'profile' && page !== 'community') {
+      window.history.pushState({}, '', '/');
+    }
   };
 
   if (loading) {
@@ -66,11 +77,11 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar currentPage={currentPage} onNavigate={setCurrentPage} />
+      <Navbar currentPage={currentPage} onNavigate={handleNavigate} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {currentPage === 'dashboard' && (
-          <Dashboard onNavigate={setCurrentPage} onStartFocus={handleStartFocus} />
+          <Dashboard onNavigate={handleNavigate} onStartFocus={handleStartFocus} />
         )}
         {currentPage === 'tasks' && <Tasks onStartFocus={handleStartFocus} />}
         {currentPage === 'focus' && (
@@ -78,9 +89,9 @@ function AppContent() {
         )}
         {currentPage === 'heatmap' && <Heatmap />}
         {currentPage === 'rooms' && <FocusRooms />}
-        {currentPage === 'insights' && <Insights onNavigate={setCurrentPage} onStartFocus={handleStartFocus} />}
+        {currentPage === 'insights' && <Insights onNavigate={handleNavigate} onStartFocus={handleStartFocus} />}
         {currentPage === 'history' && <History />}
-        {currentPage === 'profile' && <ProfilePage username={viewProfileUser} onNavigate={setCurrentPage} />}
+        {currentPage === 'profile' && <ProfilePage username={viewProfileUser} onNavigate={handleNavigate} />}
         {currentPage === 'community' && <CommunityPage />}
       </main>
     </div>
