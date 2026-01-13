@@ -9,11 +9,33 @@ import { Heatmap } from './pages/Heatmap';
 import { FocusRooms } from './pages/FocusRooms';
 import { Insights } from './pages/Insights';
 import { History } from './pages/History';
+import { ProfilePage } from './pages/ProfilePage';
+import { CommunityPage } from './pages/CommunityPage';
 import { Navbar } from './components/Navbar';
 
 function AppContent() {
   const { user, loading } = useAuth();
   const [currentPage, setCurrentPage] = useState(() => localStorage.getItem('lastPage') || 'dashboard');
+  const [viewProfileUser, setViewProfileUser] = useState(null);
+
+  useEffect(() => {
+    const path = window.location.pathname;
+
+    // 1. Profile Route
+    const profileMatch = path.match(/^\/u\/([^/]+)/);
+    if (profileMatch) {
+      setViewProfileUser(profileMatch[1]);
+      setCurrentPage('profile');
+      return;
+    }
+
+    // 2. Community Route
+    if (path === '/community') {
+      setCurrentPage('community');
+      return;
+    }
+
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('lastPage', currentPage);
@@ -58,6 +80,8 @@ function AppContent() {
         {currentPage === 'rooms' && <FocusRooms />}
         {currentPage === 'insights' && <Insights onNavigate={setCurrentPage} onStartFocus={handleStartFocus} />}
         {currentPage === 'history' && <History />}
+        {currentPage === 'profile' && <ProfilePage username={viewProfileUser} onNavigate={setCurrentPage} />}
+        {currentPage === 'community' && <CommunityPage />}
       </main>
     </div>
   );

@@ -37,14 +37,21 @@ export const Navbar = ({ currentPage, onNavigate }) => {
                 return (
                   <button
                     key={item.id}
-                    onClick={() => onNavigate(item.id)}
+                    onClick={() => {
+                      if (item.id === 'heatmap') { // Now 'profile'
+                        const uname = user.username || user.email.split('@')[0];
+                        window.location.href = `/u/${uname}`;
+                      } else {
+                        onNavigate(item.id);
+                      }
+                    }}
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${isActive
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                       }`}
                   >
                     <Icon className="w-4 h-4" />
-                    <span className="text-sm font-medium">{item.label}</span>
+                    <span className="text-sm font-medium">{item.id === 'heatmap' ? 'Profile' : item.label}</span>
                   </button>
                 );
               })}
@@ -81,8 +88,8 @@ export const Navbar = ({ currentPage, onNavigate }) => {
                 key={item.id}
                 onClick={() => onNavigate(item.id)}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                   }`}
               >
                 <Icon className="w-4 h-4" />

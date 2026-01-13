@@ -16,6 +16,7 @@ class TaskStatus(str, Enum):
 
 class UserCreate(BaseModel):
     name: str
+    username: str
     email: EmailStr
     password: str
 
@@ -26,7 +27,9 @@ class UserLogin(BaseModel):
 class UserResponse(BaseModel):
     id: str
     name: str
+    username: str
     email: str
+    bio: Optional[str] = None
     streakCount: int
     totalFocusMinutes: int
     lastFocusDate: Optional[str] = None
@@ -100,6 +103,25 @@ class BurnoutDetectionResponse(BaseModel):
     signals: Optional[List[str]] = None
     description: Optional[str] = None
     data: Optional[Dict] = None
+
+class UserProfileResponse(BaseModel):
+    id: str
+    name: str
+    username: str
+    bio: Optional[str] = None
+    avatar: Optional[str] = None
+    streak: int
+    stats: Dict[str, int] # today_minutes, week_minutes, total_minutes
+    top_tech: Optional[str] = "N/A"
+    heatmap_data: List[Dict] = []
+    joined_at: str
+    followers_count: int = 0
+    following_count: int = 0
+    is_following: bool = False
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    bio: Optional[str] = None
 
 class SmartPlanTaskResponse(BaseModel):
     id: Optional[str] = None

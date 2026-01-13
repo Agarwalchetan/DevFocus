@@ -14,6 +14,7 @@ export const Auth = () => {
 
   const [formData, setFormData] = useState({
     name: '',
+    username: '',
     email: '',
     password: '',
   });
@@ -27,8 +28,10 @@ export const Auth = () => {
         await login(formData.email, formData.password);
         toast.success('Welcome back!');
       } else {
-        await register(formData.name, formData.email, formData.password);
+        await register(formData.name, formData.username, formData.email, formData.password);
         toast.success('Account created successfully!');
+        // Redirect to new profile
+        window.location.href = `/u/${formData.username}`;
       }
     } catch (error) {
       toast.error(error.message);
@@ -75,6 +78,23 @@ export const Auth = () => {
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required={!isLogin}
                   className="bg-secondary/50 border-border"
+                />
+              </div>
+            )}
+
+            {!isLogin && (
+              <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="coolcoder123"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  required={!isLogin}
+                  className="bg-secondary/50 border-border"
+                  pattern="[a-zA-Z0-9_-]+"
+                  title="Alphanumeric characters, underscores, and hyphens only"
                 />
               </div>
             )}

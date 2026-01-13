@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconn
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict
+from typing import List, Dict, Optional
 import json
 import bcrypt
 # Monkey patch bcrypt for passlib compatibility
@@ -16,7 +16,7 @@ if not hasattr(bcrypt, '__about__'):
 
 from database import connect_to_mongo, close_mongo_connection, get_database
 from models import *
-from auth import get_password_hash, verify_password, create_access_token, get_current_user
+from auth import get_password_hash, verify_password, create_access_token, get_current_user, get_optional_current_user
 from insights_service import InsightsService
 
 active_connections: Dict[str, List[WebSocket]] = {}
@@ -46,12 +46,19 @@ async def health():
 async def register(user_data: UserCreate):
     db = get_database()
     
+    # Check if email exists
     existing_user = await db.users.find_one({"email": user_data.email})
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
+
+    # Check if username exists
+    existing_username = await db.users.find_one({"username": user_data.username})
+    if existing_username:
+        raise HTTPException(status_code=400, detail="Username already taken")
     
     user_dict = {
         "name": user_data.name,
+        "username": user_data.username,
         "email": user_data.email,
         "password": get_password_hash(user_data.password),
         "streakCount": 0,
@@ -83,10 +90,16 @@ async def get_me(current_user: TokenData = Depends(get_current_user)):
     
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Fallback for old users without username
+    username = user.get("username")
+    if not username:
+        username = user["email"].split("@")[0]
     
     return UserResponse(
         id=str(user["_id"]),
         name=user["name"],
+        username=username,
         email=user["email"],
         streakCount=user.get("streakCount", 0),
         totalFocusMinutes=user.get("totalFocusMinutes", 0),
@@ -139,6 +152,247 @@ async def get_tasks(current_user: TokenData = Depends(get_current_user)):
         )
         for task in tasks
     ]
+
+# --- PROFILE ENHANCEMENTS ---
+
+@app.get("/api/users/search", response_model=List[Dict])
+async def search_users(q: Optional[str] = None):
+    db = get_database()
+    query = {}
+    if q and len(q.strip()) > 0:
+        query = {
+            "$or": [
+                {"name": {"$regex": q, "$options": "i"}},
+                {"username": {"$regex": q, "$options": "i"}}
+            ]
+        }
+    
+    users = await db.users.find(query).sort("createdAt", -1).limit(50).to_list(50)
+    
+    return [
+        {
+            "username": u.get("username", u["email"].split("@")[0]),
+            "name": u["name"],
+            "bio": u.get("bio"),
+            "avatar": None
+        }
+        for u in users
+    ]
+
+@app.post("/api/users/{username}/follow")
+async def follow_user(username: str, current_user: TokenData = Depends(get_current_user)):
+    db = get_database()
+    
+    # 1. Get Target User
+    target_user = await db.users.find_one({"username": {"$regex": f"^{username}$", "$options": "i"}})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    currentUserDoc = await db.users.find_one({"email": current_user.email})
+    current_user_id = str(currentUserDoc["_id"])
+    target_user_id = str(target_user["_id"])
+    
+    if current_user_id == target_user_id:
+        raise HTTPException(status_code=400, detail="Cannot follow yourself")
+        
+    # 2. Check if already following
+    is_following = target_user_id in currentUserDoc.get("following", [])
+    
+    if is_following:
+        # Unfollow
+        await db.users.update_one({"_id": currentUserDoc["_id"]}, {"$pull": {"following": target_user_id}})
+        await db.users.update_one({"_id": target_user["_id"]}, {"$pull": {"followers": current_user_id}})
+        return {"message": "Unfollowed"}
+    else:
+        # Follow
+        await db.users.update_one({"_id": currentUserDoc["_id"]}, {"$addToSet": {"following": target_user_id}})
+        await db.users.update_one({"_id": target_user["_id"]}, {"$addToSet": {"followers": current_user_id}})
+        return {"message": "Followed"}
+
+@app.get("/api/users/{username}/followers", response_model=List[Dict])
+async def get_followers(username: str):
+    db = get_database()
+    user = await db.users.find_one({"username": {"$regex": f"^{username}$", "$options": "i"}})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    followers_ids = user.get("followers", [])
+    if not followers_ids:
+        return []
+
+    from bson import ObjectId
+    followers = await db.users.find({"_id": {"$in": [ObjectId(uid) for uid in followers_ids]}}).to_list(len(followers_ids))
+    
+    return [
+        {
+            "username": u.get("username", u["email"].split("@")[0]),
+            "name": u["name"],
+            "avatar": None
+        }
+        for u in followers
+    ]
+
+@app.get("/api/users/{username}/following", response_model=List[Dict])
+async def get_following(username: str):
+    db = get_database()
+    user = await db.users.find_one({"username": {"$regex": f"^{username}$", "$options": "i"}})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    following_ids = user.get("following", [])
+    if not following_ids:
+        return []
+
+    from bson import ObjectId
+    following = await db.users.find({"_id": {"$in": [ObjectId(uid) for uid in following_ids]}}).to_list(len(following_ids))
+    
+    return [
+        {
+            "username": u.get("username", u["email"].split("@")[0]),
+            "name": u["name"],
+            "avatar": None
+        }
+        for u in following
+    ]
+
+# --- PUBLIC PROFILE STATS ---
+@app.get("/api/users/{username}", response_model=UserProfileResponse)
+async def get_public_profile(username: str, current_user: Optional[TokenData] = Depends(get_optional_current_user)):
+    db = get_database()
+    # Case insensitive search
+    user = await db.users.find_one({"username": {"$regex": f"^{username}$", "$options": "i"}})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    user_id = str(user["_id"])
+    
+    # Check Following Status
+    is_following = False
+    if current_user:
+        currentUserDoc = await db.users.find_one({"email": current_user.email})
+        if currentUserDoc:
+            is_following = user_id in currentUserDoc.get("following", [])
+
+    # 1. Fetch all session logs for stats
+    # Assuming logs are stored in 'focus_sessions' or aggregated in user. 
+    # Actually, previous implementation might store logs in 'tasks' or separate collection.
+    # Checking models... 'FocusSessionResponse'.
+    
+    # Let's aggregate from 'focus_sessions' if it exists, or just use User totals for MVP if granular data isn't easily queryable.
+    # However, user requested "Today's Focus", "This Week". User model only has 'totalFocusMinutes'.
+    # I need to fetch sessions.
+    
+    sessions = await db.focus_sessions.find({"userId": user_id}).to_list(10000)
+    
+    # Calculate Stats
+    now = datetime.now(timezone.utc)
+    today = now.date()
+    start_of_week = today - timedelta(days=today.weekday()) # Monday
+    
+    today_minutes = 0
+    week_minutes = 0
+    total_minutes = user.get("totalFocusMinutes", 0)
+    tag_counts = {}
+    heatmap_data = [] # Format: { date: "2024-01-01", count: 5 }
+    
+    # Helper to parse date
+    # Sessions might store 'startTime' as ISO string
+    
+    date_map = {}
+    
+    for session in sessions:
+        try:
+            # Parse start time
+            s_time = datetime.fromisoformat(session["startTime"].replace("Z", "+00:00"))
+            s_date = s_time.date()
+            duration = session.get("duration", 0) # minutes
+            
+            # 1. Time Stats
+            if s_date == today:
+                today_minutes += duration
+            if s_date >= start_of_week:
+                week_minutes += duration
+            
+            # 2. Heatmap Data (Count = minutes or sessions? Usually intensity. Let's use minutes)
+            d_str = s_date.isoformat()
+            if d_str not in date_map: date_map[d_str] = 0
+            date_map[d_str] += duration
+
+            # 3. Tags (Need to fetch task to get tags? Session has taskId)
+            # Optimization: If session doesn't have tags, we might skip or do a $lookup.
+            # For MVP, if we don't have tags in session, we skip Top Tech for now or do a second query.
+            # Let's defer Top Tech to avoid N+1 query if session doesn't embed it.
+        except Exception: 
+            pass
+
+    # Convert map to list
+    for d, mins in date_map.items():
+        heatmap_data.append({"date": d, "count": mins})
+
+    # Top Tech (Mock or fetch if feasible)
+    # If we want real Top Tech, we need to aggregate tasks.
+    # Let's fetch recent tasks for this user
+    recent_tasks = await db.tasks.find({"userId": user_id}).sort("updatedAt", -1).limit(50).to_list(50)
+    for t in recent_tasks:
+        for tag in t.get("techTags", []):
+            tag_counts[tag] = tag_counts.get(tag, 0) + t.get("totalFocusedTime", 0)
+            
+    top_tech = "N/A"
+    if tag_counts:
+        top_tech = max(tag_counts, key=tag_counts.get)
+
+    return UserProfileResponse(
+        id=user_id,
+        name=user["name"],
+        username=user.get("username", username),
+        bio=user.get("bio"),
+        avatar=None, # Future
+        streak=user.get("streakCount", 0),
+        stats={
+            "today_minutes": today_minutes,
+            "week_minutes": week_minutes,
+            "total_minutes": total_minutes
+        },
+        top_tech=top_tech,
+        heatmap_data=heatmap_data,
+        joined_at=user["createdAt"],
+        followers_count=len(user.get("followers", [])),
+        following_count=len(user.get("following", [])),
+        is_following=is_following
+    )
+
+# --- PROFILE ENHANCEMENTS ---
+
+@app.patch("/api/users/me", response_model=UserResponse)
+async def update_user(user_update: UserUpdate, current_user: TokenData = Depends(get_current_user)):
+    db = get_database()
+    update_data = {k: v for k, v in user_update.dict().items() if v is not None}
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No updates provided")
+        
+    result = await db.users.update_one(
+        {"email": current_user.email},
+        {"$set": update_data}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    user = await db.users.find_one({"email": current_user.email})
+    
+    return UserResponse(
+        id=str(user["_id"]),
+        name=user["name"],
+        username=user.get("username", user["email"].split("@")[0]),
+        email=user["email"],
+        bio=user.get("bio"),
+        streakCount=user.get("streakCount", 0),
+        totalFocusMinutes=user.get("totalFocusMinutes", 0),
+        lastFocusDate=user.get("lastFocusDate")
+    )
+
+
 
 @app.patch("/api/tasks/{task_id}", response_model=TaskResponse)
 async def update_task(task_id: str, task_data: TaskUpdate, current_user: TokenData = Depends(get_current_user)):
