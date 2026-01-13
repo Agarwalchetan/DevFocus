@@ -1,235 +1,253 @@
-# DevFocus
+# DevFocus 🔥
 
-DevFocus is a full-stack productivity and focus-tracking application built with **React (frontend)**, **FastAPI (backend)**, and **MongoDB**.
-It supports authentication, task management, focus sessions, heatmaps, and real-time focus rooms via WebSockets.
+**A productivity tracking app built for developers who love to focus.**
 
----
-
-## Tech Stack
-
-**Frontend**
-
-- React (CRA)
-- CRACO
-- Yarn
-- Tailwind CSS
-
-**Backend**
-
-- FastAPI
-- MongoDB (Motor)
-- JWT Authentication
-- WebSockets (Uvicorn)
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Python](https://img.shields.io/badge/python-3.10+-blue)
+![React](https://img.shields.io/badge/react-18+-61DAFB)
 
 ---
 
-## Project Structure
+## 📖 About
+
+DevFocus is a comprehensive productivity tracking application designed for developers. Track your focus sessions, manage tasks, collaborate in focus rooms, and gain insights into your productivity patterns.
+
+### ✨ Key Features
+
+- **🎯 Focus Sessions** - Precision timers for deep work tracking
+- **📝 Task Management** - Organize tasks with custom types and tags
+- **👥 Collaborative Rooms** - Join focus rooms with teammates
+- **📊 Smart Insights** - AI-powered productivity recommendations
+- **🔥 Streak Tracking** - Build consistent daily habits
+- **📈 Analytics Dashboard** - Beautiful heatmaps and progress charts
+- **🌐 Community** - Connect with other developers
+- **👤 Public Profiles** - Share your productivity journey
+
+---
+
+## 🚀 Quick Start
+
+### With Docker (Recommended)
+
+```bash
+# Clone repository
+git clone https://github.com/AgarwalChetan/DevFocus.git
+cd DevFocus/app
+
+# Configure environment
+cp .env.example .env
+cp frontend/.env.example frontend/.env
+
+# Start all services
+docker-compose up -d
+
+# Access the app
+# Frontend: http://localhost
+# Backend: http://localhost:8001
+```
+
+### Manual Setup
+
+**Prerequisites:**
+- Python 3.10+
+- Node.js 18+
+- MongoDB 6.0+
+
+**Backend:**
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # Windows: .\venv\Scripts\activate
+pip install -r requirements.txt
+python server.py
+```
+
+**Frontend:**
+```bash
+cd frontend
+npm install
+npm start
+```
+
+**MongoDB:**
+```bash
+# Start local MongoDB
+mongod --dbpath /path/to/data
+```
+
+---
+
+## 📚 Documentation
+
+- **[Production Deployment Guide](docs/Production.md)** - Complete deployment instructions
+- **[API Documentation](docs/API.md)** - Backend API reference (coming soon)
+- **[User Guide](docs/UserGuide.md)** - How to use DevFocus (coming soon)
+
+---
+
+## 🛠️ Technology Stack
+
+### Backend
+- **FastAPI** - High-performance Python web framework
+- **MongoDB** - NoSQL database with Motor (async driver)
+- **JWT** - Secure authentication
+- **WebSockets** - Real-time collaborative features
+- **Pydantic** - Data validation
+
+### Frontend
+- **React 18** - UI framework
+- **Tailwind CSS** - Utility-first styling
+- **Shadcn UI** - Beautiful component library
+- **Vite** - Fast build tool
+- **Lucide React** - Icon library
+- **Sonner** - Toast notifications
+
+---
+
+## 📁 Project Structure
 
 ```
-app/
-├── backend/
-│   ├── auth.py
-│   ├── database.py
-│   ├── models.py
-│   ├── server.py
-│   ├── requirements.txt
-│   ├── .env
-│   └── venv/
-│
-├── frontend/
-│   ├── public/
-│   │   └── index.html
-│   ├── src/
-│   ├── craco.config.js
-│   ├── package.json
-│   ├── yarn.lock
-│   └── .env
-│
+DevFocus/
+├── app/
+│   ├── backend/
+│   │   ├── server.py           # Main FastAPI application
+│   │   ├── models.py           # Pydantic models
+│   │   ├── auth.py             # Authentication logic
+│   │   ├── database.py         # MongoDB connection
+│   │   └── requirements.txt    # Python dependencies
+│   ├── frontend/
+│   │   ├── src/
+│   │   │   ├── components/     # Reusable components
+│   │   │   ├── pages/          # Page components
+│   │   │   ├── contexts/       # React contexts
+│   │   │   └── hooks/          # Custom hooks
+│   │   ├── public/             # Static assets
+│   │   └── package.json        # Node dependencies
+│   ├── docs/                   # Documentation
+│   ├── docker-compose.yml      # Docker orchestration
+│   ├── Dockerfile              # Backend container
+│   └── .env.example            # Environment template
 └── README.md
 ```
 
 ---
 
-## Prerequisites
+## 🔐 Security
 
-Make sure these are installed:
+DevFocus implements industry-standard security practices:
 
-- **Node.js** (v18+ recommended)
-- **Yarn**
-- **Python** (3.10+ recommended)
-- **MongoDB** (local instance)
+- **JWT Authentication** - Secure token-based auth
+- **Password Hashing** - Bcrypt with salt
+- **CORS Protection** - Configurable origins
+- **Input Validation** - Pydantic models
+- **HTTPS Support** - SSL/TLS in production
+- **Rate Limiting** - API abuse prevention
+- **Security Headers** - XSS, clickjacking protection
 
----
-
-## Environment Variables
-
-### Backend (`backend/.env`)
-
-```env
-MONGO_URL=mongodb://localhost:27017
-DB_NAME=test_database
-CORS_ORIGINS=http://localhost:3000
-```
+See [Production Deployment Guide](docs/Production.md#security-considerations) for more details.
 
 ---
 
-### Frontend (`frontend/.env`)
+## 🌐 Deployment
 
-```env
-REACT_APP_BACKEND_URL=http://localhost:8001
-WDS_SOCKET_PORT=3000
-ENABLE_HEALTH_CHECK=false
-```
+DevFocus supports multiple deployment options:
 
-> ⚠️ Restart the frontend after changing `.env`.
+- **Docker** - Containerized deployment with Docker Compose
+- **VPS** - DigitalOcean, Linode, AWS EC2
+- **PaaS** - Heroku, Railway, Render
+- **Serverless** - Vercel (frontend) + AWS Lambda (backend)
+- **Kubernetes** - For scalable production deployments
 
----
-
-## Backend Setup (FastAPI)
-
-```bash
-cd backend
-python -m venv venv
-venv\Scripts\activate   # Windows
-pip install -r requirements.txt
-```
-
-### Fix bcrypt warning (important)
-
-```bash
-pip uninstall bcrypt -y
-pip install bcrypt==3.2.2
-```
-
-### Start backend server
-
-```bash
-python server.py
-```
-
-Backend runs on:
-
-```
-http://localhost:8001
-```
-
-Health check:
-
-```
-GET http://localhost:8001/api/health
-```
+Check the [Production Guide](docs/Production.md) for detailed instructions.
 
 ---
 
-## Frontend Setup (React)
+## 🤝 Contributing
 
-```bash
-cd frontend
-yarn install
-yarn start
-```
+Contributions are welcome! Please follow these steps:
 
-Frontend runs on:
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-```
-http://localhost:3000
-```
+### Development Guidelines
 
----
-
-## Running the App (Summary)
-
-| Service  | Command            | URL                                            |
-| -------- | ------------------ | ---------------------------------------------- |
-| Backend  | `python server.py` | [http://localhost:8001](http://localhost:8001) |
-| Frontend | `yarn start`       | [http://localhost:3000](http://localhost:3000) |
-| MongoDB  | `mongod`           | localhost:27017                                |
-
-Both frontend and backend must be running.
+- Follow PEP 8 for Python code
+- Use ESLint/Prettier for JavaScript
+- Write meaningful commit messages
+- Add tests for new features
+- Update documentation as needed
 
 ---
 
-## Authentication Flow
+## 📝 License
 
-1. Register user
-
-   ```
-   POST /api/auth/register
-   ```
-
-2. Login user
-
-   ```
-   POST /api/auth/login
-   ```
-
-3. Access protected routes using:
-
-   ```
-   Authorization: Bearer <JWT_TOKEN>
-   ```
+This project is developed by **Chetan Agarwal** for DevFocus.
 
 ---
 
-## Common Issues & Fixes
+## 👨‍💻 Author
 
-### 401 Unauthorized on login
+**Chetan Agarwal**
 
-- Wrong credentials
-- Old password hash
-- Clear users and re-register
-
-```js
-db.users.deleteMany({});
-```
+- 📧 Email: [agar.chetan1@gmail.com](mailto:agar.chetan1@gmail.com)
+- 🐙 GitHub: [@AgarwalChetan](https://github.com/AgarwalChetan)
 
 ---
 
-### CORS errors
+## 🙏 Acknowledgments
 
-Ensure backend `.env` contains:
-
-```env
-CORS_ORIGINS=http://localhost:3000
-```
+- Built with ❤️ for developers who love to focus
+- Inspired by the need for better productivity tracking
+- Thanks to the open-source community
 
 ---
 
-### VS Code import errors
+## 📊 Statistics
 
-Select correct interpreter:
-
-```
-backend/venv/Scripts/python.exe
-```
-
----
-
-## Emergent Cleanup Note
-
-All Emergent-specific scripts, badges, configs, and tooling have been **fully removed**.
-This project now runs **independently** without any Emergent dependency.
+- **Languages:** Python, JavaScript
+- **Frameworks:** FastAPI, React
+- **Database:** MongoDB
+- **Deployment:** Docker, Nginx
 
 ---
 
-## Production Build
+## 🗺️ Roadmap
 
-Frontend:
-
-```bash
-yarn build
-```
-
-Backend:
-
-- Run with `uvicorn`
-- Configure proper domain CORS
-- Use environment-specific secrets
+- [ ] Mobile app (React Native)
+- [ ] Desktop app (Electron)
+- [ ] Integrations (GitHub, JIRA, Slack)
+- [ ] Advanced analytics
+- [ ] Team workspaces
+- [ ] Premium features
+- [ ] Browser extension
 
 ---
 
-## License
+## 🐛 Known Issues
 
-MIT (or specify if different)
+See [Issues](https://github.com/AgarwalChetan/DevFocus/issues) for a list of known bugs and planned improvements.
 
 ---
+
+## 💬 Support
+
+Need help? Have questions?
+
+- 📧 Email: agar.chetan1@gmail.com
+- 🐙 GitHub Issues: [Create an issue](https://github.com/AgarwalChetan/DevFocus/issues/new)
+- 📖 Documentation: [docs/Production.md](docs/Production.md)
+
+---
+
+## ⭐ Show Your Support
+
+If you found DevFocus helpful, please consider giving it a star! ⭐
+
+---
+
+**Made with 🔥 by Chetan Agarwal**
+
