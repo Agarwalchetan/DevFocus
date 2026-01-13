@@ -98,45 +98,52 @@ export const FocusRooms = () => {
 
   const fetchRoomDetails = useCallback(async (roomId) => {
     try {
-      // Temporarily use search to find single or just re-list if we don't have get-one
-      // We can use the existing /api/rooms listing logic for now as it's efficient enough for MVP
-      const res = await fetch(`${API_URL}/api/rooms?search=`, { headers: { Authorization: `Bearer ${token}` } });
-      const all = await res.json();
-      const found = all.find(r => r.roomId === roomId);
-      if (found) {
-        const myStatus = getMyStatus(found);
-        setCurrentRoom({ ...found, status: myStatus });
+      // Use specific GET endpoint for fresh details
+      const res = await fetch(`${API_URL}/api/rooms/${roomId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store'
+      });
+      if (!res.ok) throw new Error("Failed to fetch room");
 
-        // Initial Timer Sync - UTC SAFE
-        if (found.timerStatus === 'running' && found.timerStartTime) {
-          // Add Z if missing to force UTC parsing in new Date()
-          const timeStr = found.timerStartTime.endsWith('Z') ? found.timerStartTime : found.timerStartTime + 'Z';
-          const start = new Date(timeStr).getTime();
-          // Force UTC now
-          const now = new Date().getTime();
-          // Note: new Date() gives local time value, but .getTime() gives UTC timestamp.
-          // The issue is parsing the ISO string. new Date("...Z") parses as UTC.
-          // So (now - start) is correct if start is UTC.
+      const found = await res.json();
+      const myStatus = getMyStatus(found);
 
-          const elapsedSecs = (now - start) / 1000;
-          const durationSecs = (found.timerDuration || 25) * 60;
-          const remaining = Math.max(0, durationSecs - elapsedSecs);
-          setTimeLeft(remaining);
-          setTimerStatus('running');
-        } else {
-          setTimeLeft((found.timerDuration || 25) * 60);
-          setTimerStatus(found.timerStatus || 'stopped');
-        }
+      // Log for debugging
+      console.log("Fetched Room Details:", found);
+
+      setCurrentRoom({ ...found, status: myStatus });
+
+      // Initial Timer Sync - UTC SAFE
+      if (found.timerStatus === 'running' && found.timerStartTime) {
+        // Add Z if missing to force UTC parsing in new Date()
+        const timeStr = found.timerStartTime.endsWith('Z') ? found.timerStartTime : found.timerStartTime + 'Z';
+        const start = new Date(timeStr).getTime();
+        // Force UTC now
+        const now = new Date().getTime();
+        const elapsedSecs = (now - start) / 1000;
+        const durationSecs = (found.timerDuration || 25) * 60;
+        const remaining = Math.max(0, durationSecs - elapsedSecs);
+        setTimeLeft(remaining);
+        setTimerStatus('running');
+      } else {
+        setTimeLeft((found.timerDuration || 25) * 60);
+        setTimerStatus(found.timerStatus || 'stopped');
       }
-    } catch (e) { }
+    } catch (e) { console.error("Fetch Room Error", e); }
   }, [API_URL, token, getMyStatus]);
 
+  // Fetch User & Rooms on Mount
   // Fetch User & Rooms on Mount
   useEffect(() => {
     fetchUser();
     fetchRooms();
     fetchPersonalTasks();
-  }, [fetchUser, fetchRooms, fetchPersonalTasks]);
+
+    // Auto-Join from URL
+    const params = new URLSearchParams(window.location.search);
+    const rid = params.get('room');
+    if (rid) fetchRoomDetails(rid);
+  }, [fetchUser, fetchRooms, fetchPersonalTasks, fetchRoomDetails]);
 
   // Scroll Chat
   useEffect(() => {
@@ -172,6 +179,14 @@ export const FocusRooms = () => {
 
         // 2. Handle Room Updates (Join Requests for Admins, etc)
         if (msg.type === 'room_update') {
+          // Check for Kick/Block affecting ME
+          if ((msg.trigger === 'kick' && msg.kickedUserId === (user.id || user._id)) ||
+            (msg.trigger === 'block' && msg.blockedUserId === (user.id || user._id))) {
+            setCurrentRoom(null);
+            toast.error("You have been removed from the room.");
+            return;
+          }
+
           // Triggers when someone joins, leaves, or is approved.
           // We need to re-fetch to update pendingRequests list or member list.
           if (currentRoom?.roomId) fetchRoomDetails(currentRoom.roomId);
@@ -298,30 +313,44 @@ export const FocusRooms = () => {
     } catch (e) { toast.error("Action failed"); }
   }, [API_URL, token, currentRoom?.roomId]);
 
-  // Timer Tick
+  // Timer Tick - Delta Logic
   useEffect(() => {
     let interval;
-    if (timerStatus === 'running' && timeLeft > 0) {
-      interval = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            // Timer Finished
-            if (currentRoom?.status === 'admin') {
-              // Auto-log the session duration (curr duration in room settings)
-              // Use existing duration from room data or fallback
-              const duration = currentRoom.timerDuration || 25;
-              logSession(duration);
-              // Reset/Stop timer on backend
-              controlTimer('reset');
-            }
-            return 0;
+    if (timerStatus === 'running' && currentRoom?.timerStartTime) {
+      // Calculate specific end time based on server start time + duration
+      // Handle Z for UTC safety
+      const startTimeStr = currentRoom.timerStartTime.endsWith('Z')
+        ? currentRoom.timerStartTime
+        : text = currentRoom.timerStartTime + 'Z';
+
+      const startTime = new Date(startTimeStr).getTime();
+      const durationMs = (currentRoom.timerDuration || 25) * 60 * 1000;
+      const endTime = startTime + durationMs;
+
+      const updateTimer = () => {
+        const now = Date.now();
+        const diff = endTime - now;
+        const remainingSeconds = Math.max(0, Math.ceil(diff / 1000));
+
+        setTimeLeft(remainingSeconds);
+
+        if (remainingSeconds <= 0) {
+          // Timer Finished
+          if (currentRoom.status === 'admin') {
+            const duration = currentRoom.timerDuration || 25;
+            logSession(duration);
+            controlTimer('reset');
           }
-          return prev - 1;
-        });
-      }, 1000);
+          setTimerStatus('stopped');
+        }
+      };
+
+      // Run immediately then interval
+      updateTimer();
+      interval = setInterval(updateTimer, 1000);
     }
     return () => clearInterval(interval);
-  }, [timerStatus, timeLeft, currentRoom?.status, currentRoom?.timerDuration, logSession, controlTimer]);
+  }, [timerStatus, currentRoom?.timerStartTime, currentRoom?.timerDuration, currentRoom?.status, logSession, controlTimer]);
 
 
 
@@ -346,6 +375,7 @@ export const FocusRooms = () => {
         const newRoom = await response.json();
         const roomWithStatus = { ...newRoom, status: 'admin' };
         setCurrentRoom(roomWithStatus);
+        window.history.pushState({}, '', '?room=' + newRoom.roomId);
         setDialogOpen(false);
         toast.success("Room created!");
         fetchRooms();
@@ -368,6 +398,7 @@ export const FocusRooms = () => {
       if (response.ok) {
         if (data.status === 'member') {
           fetchRoomDetails(selectedRoomToJoin.roomId);
+          window.history.pushState({}, '', '?room=' + selectedRoomToJoin.roomId);
           setJoinDialogOpen(false);
         } else {
           toast.success("Request sent! Entering Lobby...");
@@ -398,6 +429,7 @@ export const FocusRooms = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       toast.success("Member kicked");
+      fetchRoomDetails(currentRoom.roomId);
     } catch (e) { toast.error("Failed to kick member"); }
   };
 
@@ -409,6 +441,7 @@ export const FocusRooms = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       toast.success("Member blocked");
+      fetchRoomDetails(currentRoom.roomId);
     } catch (e) { toast.error("Failed to block member"); }
   };
 
@@ -609,7 +642,7 @@ export const FocusRooms = () => {
             </div>
 
             <div className="pointer-events-auto flex gap-2">
-              <Button variant="destructive" size="sm" className="h-8 shadow-sm opacity-90 hover:opacity-100" onClick={() => setCurrentRoom(null)}>Leave Room</Button>
+              <Button variant="destructive" size="sm" className="h-8 shadow-sm opacity-90 hover:opacity-100" onClick={() => { setCurrentRoom(null); window.history.pushState({}, '', '/'); }}>Leave Room</Button>
               {!isRightOpen && (
                 <Button variant="outline" size="icon" className="shadow-sm bg-background/80 backdrop-blur" onClick={() => setIsRightOpen(true)}>
                   <Sidebar className="w-4 h-4 scale-x-[-1]" />
@@ -689,7 +722,10 @@ export const FocusRooms = () => {
               <div className="flex items-center justify-between p-4 border-b h-16 shrink-0 bg-muted/20">
                 <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-background" onClick={() => setIsRightOpen(false)}><ChevronRight className="w-4 h-4" /></Button>
                 <div className="flex items-center gap-2">
-                  {currentRoom.status === 'admin' && (
+                  {/* DEBUG LOG: */}
+                  {console.log("Room Owner:", currentRoom.ownerId, "Me:", (user.id || user._id), "BlockList:", currentRoom.blockedUsers)}
+
+                  {currentRoom.ownerId === (user.id || user._id) && (
                     <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive" onClick={() => setBlockedDialogOpen(true)} title="Manage Blocked Users">
                       <ShieldMinus className="w-3.5 h-3.5" />
                     </Button>

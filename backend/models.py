@@ -77,16 +77,7 @@ class HeatmapEntryResponse(BaseModel):
     totalMinutes: int
     categoryBreakdown: Dict[str, int]
 
-class FocusRoomCreate(BaseModel):
-    name: str
-    isPrivate: bool = False
 
-class FocusRoomResponse(BaseModel):
-    roomId: str
-    name: str
-    isPrivate: bool
-    activeUsers: List[Dict]
-    createdAt: str
 
 class Token(BaseModel):
     access_token: str
@@ -169,12 +160,12 @@ class FocusRoomResponse(BaseModel):
     roomId: str
     name: str
     description: Optional[str] = None
-    ownerId: str
+    ownerId: Optional[str] = None
     ownerName: Optional[str] = None # For UI display
     isPrivate: bool = True 
     activeUsers: List[Dict] = [] 
     members: List[RoomMember] = [] 
-    blockedUsers: List[str] = [] # List of User IDs
+    blockedUsers: Optional[List[str]] = [] # List of User IDs
     pendingRequests: List[RoomMember] = [] 
     tasks: List[RoomTask] = []
     chatHistory: List[ChatMessage] = []

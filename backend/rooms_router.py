@@ -84,10 +84,43 @@ async def get_rooms(search: Optional[str] = None, current_user: TokenData = Depe
         # Sanitize timerDuration if float (sanitize bad data)
         if room.get("timerDuration"):
             room["timerDuration"] = int(room["timerDuration"])
+
+        # Ensure blockedUsers are strings
+        raw_blocked = room.get("blockedUsers") or []
+        room["blockedUsers"] = [str(uid) for uid in raw_blocked]
             
         rooms.append(room)
         
     return rooms
+
+@router.get("/api/rooms/{room_id}", response_model=FocusRoomResponse)
+async def get_room_details(room_id: str, current_user: TokenData = Depends(get_current_user)):
+    db = get_database()
+    room = await db.focus_rooms.find_one({"_id": ObjectId(room_id)})
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    
+    room["roomId"] = str(room["_id"])
+    room["ownerId"] = str(room.get("ownerId"))
+    
+    # Ensure blockedUsers are strings (handling potential ObjectId mixed types)
+    raw_blocked = room.get("blockedUsers") or []
+    room["blockedUsers"] = [str(uid) for uid in raw_blocked]
+    
+    # Populate ownerName
+    if room.get("ownerId"):
+        try:
+            owner_doc = await db.users.find_one({"_id": ObjectId(room["ownerId"])})
+            if owner_doc:
+                room["ownerName"] = owner_doc.get("name")
+        except Exception:
+            room["ownerName"] = "Unknown"
+            
+    # Sanitize timerDuration
+    if room.get("timerDuration"):
+        room["timerDuration"] = int(room["timerDuration"])
+
+    return room
 
 @router.post("/api/rooms", response_model=FocusRoomResponse)
 async def create_room(room: FocusRoomCreate, current_user: TokenData = Depends(get_current_user)):
@@ -477,8 +510,9 @@ async def log_room_session(room_id: str, log_data: RoomSessionLog, current_user:
 @router.post("/api/rooms/{room_id}/kick")
 async def kick_member(room_id: str, member_id: str, current_user: TokenData = Depends(get_current_user)):
     db = get_database()
+    user = await db.users.find_one({"email": current_user.email})
     room = await db.focus_rooms.find_one({"_id": ObjectId(room_id)})
-    if not room or room["ownerId"] != current_user.id:
+    if not room or room["ownerId"] != str(user["_id"]):
         raise HTTPException(status_code=403, detail="Not authorized")
 
     await db.focus_rooms.update_one(
@@ -496,8 +530,9 @@ async def kick_member(room_id: str, member_id: str, current_user: TokenData = De
 @router.post("/api/rooms/{room_id}/block")
 async def block_member(room_id: str, member_id: str, current_user: TokenData = Depends(get_current_user)):
     db = get_database()
+    user = await db.users.find_one({"email": current_user.email})
     room = await db.focus_rooms.find_one({"_id": ObjectId(room_id)})
-    if not room or room["ownerId"] != current_user.id:
+    if not room or room["ownerId"] != str(user["_id"]):
         raise HTTPException(status_code=403, detail="Not authorized")
 
     # Kick member AND Add to blockedUsers
@@ -519,8 +554,9 @@ async def block_member(room_id: str, member_id: str, current_user: TokenData = D
 @router.post("/api/rooms/{room_id}/unblock")
 async def unblock_member(room_id: str, member_id: str, current_user: TokenData = Depends(get_current_user)):
     db = get_database()
+    user = await db.users.find_one({"email": current_user.email})
     room = await db.focus_rooms.find_one({"_id": ObjectId(room_id)})
-    if not room or room["ownerId"] != current_user.id:
+    if not room or room["ownerId"] != str(user["_id"]):
         raise HTTPException(status_code=403, detail="Not authorized")
 
     await db.focus_rooms.update_one(
