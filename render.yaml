@@ -29,7 +29,7 @@ services:
     name: devfocus-frontend
     env: static
     region: oregon
-    buildCommand: "cd frontend && npm install && npm run build"
+    buildCommand: "cd frontend && npm install --legacy-peer-deps && npm run build"
     staticPublishPath: frontend/build
     routes:
       - type: rewrite
