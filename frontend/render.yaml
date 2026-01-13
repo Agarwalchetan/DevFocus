@@ -22,4 +22,4 @@ services:
         destination: /index.html
     envVars:
       - key: REACT_APP_BACKEND_URL
-        value: https://devfocus-backend-xfkc.onrender.com
+        value: https://devfocus-backend.onrender.com
