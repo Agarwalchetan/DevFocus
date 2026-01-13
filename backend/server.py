@@ -114,7 +114,7 @@ async def create_task(task_data: TaskCreate, current_user: TokenData = Depends(g
     task_dict = {
         "userId": str(user["_id"]),
         "title": task_data.title,
-        "type": task_data.type.value,
+        "type": task_data.type,  # Now just a string, no .value needed
         "techTags": task_data.techTags,
         "estimatedTime": task_data.estimatedTime,
         "totalFocusedTime": 0,
@@ -392,6 +392,59 @@ async def update_user(user_update: UserUpdate, current_user: TokenData = Depends
         lastFocusDate=user.get("lastFocusDate")
     )
 
+# --- TASK TYPES MANAGEMENT ---
+
+@app.get("/api/task-types", response_model=List[str])
+async def get_task_types(current_user: TokenData = Depends(get_current_user)):
+    """Get all task types (predefined + custom)"""
+    db = get_database()
+    user = await db.users.find_one({"email": current_user.email})
+    
+    custom_types = user.get("customTaskTypes", [])
+    # Merge predefined and custom, remove duplicates
+    all_types = DEFAULT_TASK_TYPES + [t for t in custom_types if t not in DEFAULT_TASK_TYPES]
+    
+    return all_types
+
+@app.post("/api/task-types")
+async def add_task_type(request: dict, current_user: TokenData = Depends(get_current_user)):
+    """Add a new custom task type"""
+    db = get_database()
+    
+    task_type = request.get("type", "").strip()
+    if not task_type:
+        raise HTTPException(status_code=400, detail="Task type cannot be empty")
+    
+    user = await db.users.find_one({"email": current_user.email})
+    custom_types = user.get("customTaskTypes", [])
+    
+    # Check if already exists (case-insensitive)
+    if any(t.lower() == task_type.lower() for t in DEFAULT_TASK_TYPES + custom_types):
+        raise HTTPException(status_code=400, detail="Task type already exists")
+    
+    # Add to user's custom types
+    await db.users.update_one(
+        {"email": current_user.email},
+        {"$addToSet": {"customTaskTypes": task_type}}
+    )
+    
+    return {"message": "Task type added", "type": task_type}
+
+@app.delete("/api/task-types/{task_type}")
+async def delete_task_type(task_type: str, current_user: TokenData = Depends(get_current_user)):
+    """Delete a custom task type"""
+    db = get_database()
+    
+    # Don't allow deleting predefined types
+    if task_type in DEFAULT_TASK_TYPES:
+        raise HTTPException(status_code=400, detail="Cannot delete predefined task types")
+    
+    await db.users.update_one(
+        {"email": current_user.email},
+        {"$pull": {"customTaskTypes": task_type}}
+    )
+    
+    return {"message": "Task type deleted"}
 
 
 @app.patch("/api/tasks/{task_id}", response_model=TaskResponse)

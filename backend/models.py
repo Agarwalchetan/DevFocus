@@ -3,11 +3,8 @@ from typing import Optional, List, Dict
 from datetime import datetime
 from enum import Enum
 
-class TaskType(str, Enum):
-    STUDY = "Study"
-    CODING = "Coding"
-    DEBUGGING = "Debugging"
-    PLANNING = "Planning"
+# Predefined task types (users can add their own)
+DEFAULT_TASK_TYPES = ["Study", "Coding", "Debugging", "Planning"]
 
 class TaskStatus(str, Enum):
     TODO = "todo"
@@ -36,14 +33,14 @@ class UserResponse(BaseModel):
 
 class TaskCreate(BaseModel):
     title: str
-    type: TaskType
+    type: str  # Now accepts any string (predefined or custom)
     techTags: List[str] = []
     estimatedTime: int
     scheduledDate: Optional[str] = None  # ISO date string: "2026-01-15"
 
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
-    type: Optional[TaskType] = None
+    type: Optional[str] = None  # Now accepts any string
     techTags: Optional[List[str]] = None
     estimatedTime: Optional[int] = None
     status: Optional[TaskStatus] = None

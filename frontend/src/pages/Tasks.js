@@ -13,7 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
-import { Plus, Play, Check, Trash2, Clock, Code2, Filter } from 'lucide-react';
+import { Plus, Play, Check, Trash2, Clock, Code2, Filter, PlusCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const Tasks = ({ onStartFocus }) => {
@@ -24,6 +24,9 @@ export const Tasks = ({ onStartFocus }) => {
   const [filter, setFilter] = useState('all');
   const [activeSection, setActiveSection] = useState('all'); // 'daily', 'future', 'all'
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [addTypeDialogOpen, setAddTypeDialogOpen] = useState(false);
+  const [taskTypes, setTaskTypes] = useState(['Study', 'Coding', 'Debugging', 'Planning']); // Dynamic
+  const [newTypeName, setNewTypeName] = useState('');
 
   const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
@@ -37,6 +40,7 @@ export const Tasks = ({ onStartFocus }) => {
 
   useEffect(() => {
     fetchTasks();
+    fetchTaskTypes();
   }, []);
 
   useEffect(() => {
@@ -54,6 +58,46 @@ export const Tasks = ({ onStartFocus }) => {
       toast.error('Failed to load tasks');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTaskTypes = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/task-types`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      setTaskTypes(data);
+    } catch (error) {
+      console.error('Failed to load task types');
+    }
+  };
+
+  const createTaskType = async (e) => {
+    e.preventDefault();
+    if (!newTypeName.trim()) return;
+
+    try {
+      const response = await fetch(`${API_URL}/api/task-types`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ type: newTypeName.trim() }),
+      });
+
+      if (response.ok) {
+        await fetchTaskTypes();
+        setAddTypeDialogOpen(false);
+        setNewTypeName('');
+        toast.success('Task type added!');
+      } else {
+        const err = await response.json();
+        toast.error(err.detail || 'Failed to add task type');
+      }
+    } catch (error) {
+      toast.error('Failed to add task type');
     }
   };
 
@@ -219,6 +263,8 @@ export const Tasks = ({ onStartFocus }) => {
     Planning: 'bg-violet-subtle text-violet border-violet/30',
   };
 
+  const getTypeColor = (type) => typeColors[type] || 'bg-secondary text-foreground border-border';
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -288,13 +334,48 @@ export const Tasks = ({ onStartFocus }) => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Study">Study</SelectItem>
-                    <SelectItem value="Coding">Coding</SelectItem>
-                    <SelectItem value="Debugging">Debugging</SelectItem>
-                    <SelectItem value="Planning">Planning</SelectItem>
+                    {taskTypes.map(type => (
+                      <SelectItem key={type} value={type}>{type}</SelectItem>
+                    ))}
+                    <div className="border-t border-border mt-1 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setAddTypeDialogOpen(true)}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-primary hover:bg-secondary rounded-sm transition-colors"
+                      >
+                        <PlusCircle className="w-4 h-4" />
+                        Add Custom Type
+                      </button>
+                    </div>
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Add Type Dialog */}
+              <Dialog open={addTypeDialogOpen} onOpenChange={setAddTypeDialogOpen}>
+                <DialogContent className="bg-card border-border max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle>Add Custom Task Type</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={createTaskType} className="space-y-4 mt-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="typeName">Type Name</Label>
+                      <Input
+                        id="typeName"
+                        placeholder="e.g., Testing, Design, Research"
+                        value={newTypeName}
+                        onChange={(e) => setNewTypeName(e.target.value)}
+                        required
+                        className="bg-secondary/50 border-border"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button type="submit" className="flex-1">Add Type</Button>
+                      <Button type="button" variant="outline" onClick={() => setAddTypeDialogOpen(false)}>Cancel</Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
 
               <div className="space-y-2">
                 <Label htmlFor="tags">Tech Tags (comma-separated)</Label>
@@ -348,8 +429,8 @@ export const Tasks = ({ onStartFocus }) => {
 
       <div className="flex items-center gap-2">
         <Filter className="w-5 h-5 text-muted-foreground" />
-        <div className="flex gap-2">
-          {['all', 'active', 'completed', 'Study', 'Coding', 'Debugging', 'Planning'].map(
+        <div className="flex gap-2 flex-wrap">
+          {['all', 'active', 'completed', ...taskTypes].map(
             (f) => (
               <Button
                 key={f}
